@@ -273,7 +273,7 @@ int acpt() {
     }
     char str[INET6_ADDRSTRLEN];
     std::cout << "Connected with client!" << std::endl;
-    std::cout << inet_ntop(AF_INET6, &(newSockAddr.sin6_addr.s6_addr), str, INET6_ADDRSTRLEN) << ":" << newSockAddr.sin6_port << std::endl;
+    std::cout << inet_ntop(AF_INET6, &(newSockAddr.sin6_addr.s6_addr), str, INET6_ADDRSTRLEN) << ":" << ntohs(newSockAddr.sin6_port) << std::endl;
 
     tmp[j] = "aavavgaagggggggg";
     tsk[j] = newSockAddr;
@@ -291,7 +291,7 @@ int main(int argc, char* argv[])
     //grab the port number
     int port = atoi(argv[1]);
     //buffer to send and receive messages with
-    char msg[128], msg1[10], msg2[10], msg3[128], msg4[10], msg5[10];
+    char msg[64], msg1[10], msg2[10], msg3[64], msg4[10], msg5[10];
 
     //setup a socket and connection tools
     sockaddr_in6 servAddr;
@@ -332,7 +332,7 @@ int main(int argc, char* argv[])
 
                     bool flg1 = false;
                     std::string data1, data2, datac1, datac2, oip;
-                    char str1[INET_ADDRSTRLEN], str2[INET_ADDRSTRLEN];
+                    char str1[INET6_ADDRSTRLEN], str2[INET6_ADDRSTRLEN];
                     oip = "221.223.91.112";
                     j = fut[k].get();
 
@@ -360,7 +360,7 @@ int main(int argc, char* argv[])
                                 send(newSd[i], (char*)&msg2, sizeof(msg2), 0);
                                 send(newSd[j], (char*)&msg2, sizeof(msg2), 0);
                                 memset(&msg2, 0, sizeof(msg2));
-                                if (recv(newSd[i], (char*)&msg3, sizeof(msg3), 0) <= 0) {
+                                if (recv(newSd[i], (char*)&msg2, sizeof(msg2), 0) <= 0) {
                                     std::cout << "cl discnted" << std::endl;
                                     close(newSd[i]);
                                     close(newSd[j]);
@@ -371,8 +371,8 @@ int main(int argc, char* argv[])
                                     flg1 = true;
                                     break;
                                 }
-                                memset(&msg3, 0, sizeof(msg3));
-                                if (recv(newSd[j], (char*)&msg3, sizeof(msg3), 0) <= 0) {
+                                memset(&msg2, 0, sizeof(msg2));
+                                if (recv(newSd[j], (char*)&msg2, sizeof(msg2), 0) <= 0) {
                                     std::cout << "cl discnted" << std::endl;
                                     close(newSd[i]);
                                     close(newSd[j]);
@@ -398,10 +398,10 @@ int main(int argc, char* argv[])
                                 memset(&msg1, 0, sizeof(msg1));//clear the buffer
                                 memset(&msg2, 0, sizeof(msg2));//clear the buffer
 
-                                data1 = tsk[j].sin6_port;
-                                data2 = tsk[i].sin6_port;
-                                datac1 = inet_ntop(AF_INET, &(tsk[j].sin6_addr.s6_addr), str1, INET6_ADDRSTRLEN);
-                                datac2 = inet_ntop(AF_INET, &(tsk[i].sin6_addr.s6_addr), str2, INET6_ADDRSTRLEN);
+                                data1 = std::to_string(ntohs(tsk[j].sin6_port));
+                                data2 = std::to_string(ntohs(tsk[i].sin6_port));
+                                datac1 = inet_ntop(AF_INET6, &(tsk[j].sin6_addr.s6_addr), str1, INET6_ADDRSTRLEN);
+                                datac2 = inet_ntop(AF_INET6, &(tsk[i].sin6_addr.s6_addr), str2, INET6_ADDRSTRLEN);
                                 if (datac1 == datac2) {
                                     strcpy(msg, tmp1[j].c_str());
                                     std::cout << "lc : " << std::endl;
