@@ -567,7 +567,7 @@ void SimpleRenderer::SSS(const char* aa) {
     std::thread t2;
 
     bool xc = false;
-    if (connect(tcpSd, (sockaddr*)&sendAd->ai_addr, sendAd->ai_addrlen) == false) {
+    if (connect(tcpSd, (sockaddr*)&sendAd->ai_addr, sendAd->ai_addrlen) < 0) {
 
         std::cout << errno << std::endl;
         close(tcpSd);
