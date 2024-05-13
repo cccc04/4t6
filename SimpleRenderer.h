@@ -26,11 +26,11 @@ public:
     const char* rts();
     bool yn();
     void ync();
-    void cnect(const char* ip);
+    bool cnect(const char* ip);
     SimpleRenderer();
     bool yyn;
 private:
-    struct sockaddr_in smt();
+    struct sockaddr_in6 smt();
     void punch(sockaddr_in sendSockAddr, std::future<void> futureObj);
     void pong();
     void snd(int tcpSd1);

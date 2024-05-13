@@ -8,8 +8,21 @@ int main(int argc, char* argv[]) {
         std::cerr << "Usage: ip_address port" << std::endl; exit(0);
     }
     SimpleRenderer *sp = new SimpleRenderer;
-    sp->yyn = false;
-    sp->cnect(argv[1]);
+    bool cflg;
+    cflg = sp->cnect(argv[1]);
+    while ( cflg == false) {
+        std::string ss;
+        do {
+            std::cout << "try again? (y/n)" << std::endl;
+            getline(std::cin, ss);
+        } while ((ss != "y" ) || (ss != "n"));
+        if (ss == "n") {
+            exit(0);
+        }
+        else {
+            cflg = sp->cnect(argv[1]);
+        }
+    }
     std::thread t1, t2;
     std::promise<void> exitSignal;
     std::future<void> futureObj = exitSignal.get_future();

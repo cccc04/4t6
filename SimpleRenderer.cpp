@@ -109,18 +109,18 @@ void SimpleRenderer::punch(sockaddr_in sendSockAddr, std::future<void> futureObj
 
 }
 
-struct sockaddr_in SimpleRenderer::smt() {
-    int sock = socket(PF_INET, SOCK_DGRAM, 0);
-    sockaddr_in loopback;
+sockaddr_in6 SimpleRenderer::smt() {
+    int sock = socket(AF_INET6, SOCK_DGRAM, 0);
+    sockaddr_in6 loopback;
 
     if (sock == -1) {
         std::cerr << "Could not socket\n";
     }
 
     memset(&loopback, 0, sizeof(loopback));
-    loopback.sin_family = AF_INET;
-    loopback.sin_addr.s_addr = 1337;   // can be any IP address
-    loopback.sin_port = htons(9999);      // using debug port
+    loopback.sin6_family = AF_INET6;
+    std::fill_n(loopback.sin6_addr.s6_addr, 0, 16);  // can be any IP address
+    loopback.sin6_port = htons(9999);      // using debug port
 
     if (connect(sock, reinterpret_cast<sockaddr*>(&loopback), sizeof(loopback)) == -1) {
         close(sock);
@@ -136,7 +136,7 @@ struct sockaddr_in SimpleRenderer::smt() {
     close(sock);
 
     char buf[INET_ADDRSTRLEN];
-    if (inet_ntop(AF_INET, &loopback.sin_addr, buf, INET_ADDRSTRLEN) == 0x0) {
+    if (inet_ntop(AF_INET6, &loopback.sin6_addr, buf, INET6_ADDRSTRLEN) == 0x0) {
         std::cerr << "Could not inet_ntop\n";
     }
     else {
@@ -343,16 +343,42 @@ void SimpleRenderer::snd(int tcpSd1) {
 
 }
 
-void SimpleRenderer::cnect(const char* ip) {
+bool SimpleRenderer::cnect(const char* ip) {
 
-    const char* serverIp = ip; int svport = 11111;
+    const char* serverIp = ip; const char* svport = "11111";
     //setup a socket and connection tools 
-    struct hostent* svhost = gethostbyname(serverIp);
-    sockaddr_in svAddr;
-    bzero((char*)&svAddr, sizeof(svAddr));
-    svAddr.sin_family = AF_INET;
-    svAddr.sin_addr.s_addr = inet_addr(inet_ntoa(*(struct in_addr*)*svhost->h_addr_list));
-    svAddr.sin_port = htons(svport);
+    struct addrinfo  hints;
+    struct addrinfo* result;
+    //sockaddr6_in svAddr;
+    bzero((char*)&hints, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    //hints.ai_socktype = SOCK_STREAM;
+    //hints.ai_protocol = 0;
+    if (getaddrinfo(ip, svport, &hints, &result) != 0) {
+        std::cout << "gai" << std::endl;
+        return false;
+    }
+    for (struct addrinfo* rp = result; rp != NULL; rp = rp->ai_next) {
+        clientSd = socket(rp->ai_family, SOCK_STREAM, 0);
+        if (clientSd == -1)
+            continue;
+
+        if (connect(clientSd, rp->ai_addr, rp->ai_addrlen) < 0) {
+            std::cout << "cant connect to server, try again later maybe" << std::endl;
+            td = "cant connect to server, try again later maybe";
+            yon = true;
+            return false;
+        }
+        else {
+            td = "..waiting for server";
+            yon = true;
+            return true;
+        }
+        close(clientSd);
+    }
+
+    /*svAddr.sin6_addr.s6_addr = inet_addr(inet_ntoa(*(struct in6_addr*)*svhost->h_addr_list));
+    svAddr.sin6_port = htons(svport);
     clientSd = socket(AF_INET, SOCK_STREAM, 0);
     if (clientSd == -1) {
         std::cout << "cantsocket" << std::endl;
@@ -362,14 +388,13 @@ void SimpleRenderer::cnect(const char* ip) {
         std::cout << "cant connect to server, try again later maybe" << std::endl;
         td = "cant connect to server, try again later maybe";
         yon = true;
-        return;
+        return false;
     }
     else {
-        yyn = true;
-    }
-
-    td = "..waiting for server";
-    yon = true;
+        td = "..waiting for server";
+        yon = true;
+        return true;
+    }*/
 }
 
 void SimpleRenderer::SSS(const char* aa) {
