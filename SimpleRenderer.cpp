@@ -354,7 +354,7 @@ bool SimpleRenderer::cnect(const char* ip, const char* port, int &sock, int tcud
     struct addrinfo* result;
     //sockaddr6_in svAddr;
     bzero((char*)&hints, sizeof(hints));
-    hints.ai_family = AF_UNSPEC;
+    hints.ai_family = AF_INET6;
     hints.ai_socktype = tcud;
     //hints.ai_protocol = 0;
     if (cnnct == false){
@@ -362,17 +362,19 @@ bool SimpleRenderer::cnect(const char* ip, const char* port, int &sock, int tcud
         hints.ai_canonname = NULL;
         hints.ai_addr = NULL;
         hints.ai_next = NULL;
+        hints.ai_flags = AI_PASSIVE;
     }
     if (getaddrinfo(ip, port, &hints, &result) != 0) {
-        std::cout << "gai" << std::endl;
+        std::cout << "invalid ip/port.(only ipv6 accepted)" << std::endl;
         return false;
     }
     for (struct addrinfo* rp = result; rp != NULL; rp = rp->ai_next) {
-        sock = socket(rp->ai_family, rp->ai_socktype, 0);
-        if (sock == -1)
+        int i = socket(rp->ai_family, rp->ai_socktype, 0);
+        if (i == -1)
             continue;
 
         if (cnnct == true) {
+            sock = i;
             if (connect(sock, rp->ai_addr, rp->ai_addrlen) < 0) {
                 std::cout << "cant connect to server, try again later maybe" << std::endl;
                 td = "cant connect to server, try again later maybe";
@@ -387,7 +389,7 @@ bool SimpleRenderer::cnect(const char* ip, const char* port, int &sock, int tcud
         }
         else {
             if (bind(sock, (struct sockaddr*)&rp->ai_addr, rp->ai_addrlen) < 0) {
-                std::cerr << "cantbind, maybe try another port" << std::endl;
+                std::cerr << "393: cantbind, maybe try another port" << std::endl;
                 td = "cantbind, maybe try another port";
                 yon = true;
                 return false;
@@ -427,7 +429,7 @@ void SimpleRenderer::SSS(const char* aa) {
     char svmsg[50], svmsg1[128], svmsg2[10], svmsg3[10], svmsg4[128];
     //sockaddr_in sendSockAddr, myAddr;
 
-    tcpSd = socket(AF_INET, SOCK_STREAM, 0);
+    tcpSd = socket(AF_INET6, SOCK_STREAM, 0);
     if (tcpSd == -1) {
         std::cout << "canttcpsocket" << std::endl;
         return;
@@ -506,14 +508,14 @@ void SimpleRenderer::SSS(const char* aa) {
     }
 
 
-    udpSd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (cnect(pt0, pt2, udpSd, SOCK_DGRAM, false) == false) {
-        std::cout << "cantsocket" << std::endl;
-        return;
-    }
+    /*udpSd = socket(AF_INET6, SOCK_DGRAM, 0);
 
     if (setsockopt(udpSd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
         std::cout << "prblm2" << std::endl;
+    }
+    if (cnect(pt0, pt2, udpSd, SOCK_DGRAM, false) == false) {
+        std::cout << "cantsocket" << std::endl;
+        return;
     }
 
     std::promise<void> exitSignal1;
@@ -553,16 +555,16 @@ void SimpleRenderer::SSS(const char* aa) {
             t1.join();
             break;
         }
-    }*/
-
-    std::thread t2;
+    }
 
     if (cnect(pt0, pt2, tcpSd, SOCK_STREAM, false) == false) {
         std::cout << "cantbindtcp" << std::endl;
         td = "cantbindtcp";
         yon = true;
         return;
-    }
+    }*/
+
+    std::thread t2;
 
     bool xc = false;
     if (connect(tcpSd, (sockaddr*)&sendAd->ai_addr, sendAd->ai_addrlen) == false) {
@@ -571,11 +573,11 @@ void SimpleRenderer::SSS(const char* aa) {
         close(tcpSd);
 
         std::cout << "cantconnect, retrying once.." << std::endl;
-        if (cnect(pt0, pt2, tcptd[0], SOCK_STREAM, false) == false) {
-            std::cout << "canttcpsocket" << std::endl;
-        }
         if (setsockopt(tcptd[0], SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
             std::cout << "prblm" << std::endl;
+        }
+        if (cnect(pt0, pt2, tcptd[0], SOCK_STREAM, false) == false) {
+            std::cout << "canttcpsocket" << std::endl;
         }
         if (connect_with_timeout(tcptd[0], (sockaddr*)&sendAd->ai_addr, sendAd->ai_addrlen, 100) == -1){
 
@@ -606,9 +608,12 @@ void SimpleRenderer::SSS(const char* aa) {
         }
 
     }
+    else {
+        xc = true;
+    }
 
-    exitSignal1.set_value();
-    t1.join();
+    //exitSignal1.set_value();
+    //t1.join();
 
     if (xc == true) {
 
