@@ -86,7 +86,7 @@ int SimpleRenderer::connect_with_timeout(int sockfd, const struct sockaddr* addr
     return rc;
 }
 
-void SimpleRenderer::punch(sockaddr_in sendSockAddr, std::future<void> futureObj) {
+void SimpleRenderer::punch(sockaddr sendSockAddr, std::future<void> futureObj) {
 
     char msg[10];
     int i;
@@ -343,40 +343,62 @@ void SimpleRenderer::snd(int tcpSd1) {
 
 }
 
-bool SimpleRenderer::cnect(const char* ip) {
+bool SimpleRenderer::cnect(const char* ip, const char* port, int sock, int tcud, bool cnnct) {
 
-    const char* serverIp = ip; const char* svport = "11111";
+    if (tcud != SOCK_DGRAM || tcud != SOCK_STREAM) {
+        std::cout << "invalid tcud" << std::endl;
+        return false;
+    }
     //setup a socket and connection tools 
     struct addrinfo  hints;
     struct addrinfo* result;
     //sockaddr6_in svAddr;
     bzero((char*)&hints, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
-    //hints.ai_socktype = SOCK_STREAM;
+    hints.ai_socktype = tcud;
     //hints.ai_protocol = 0;
-    if (getaddrinfo(ip, svport, &hints, &result) != 0) {
+    if (cnnct == true){
+        ip = NULL;
+        hints.ai_canonname = NULL;
+        hints.ai_addr = NULL;
+        hints.ai_next = NULL;
+    }
+    if (getaddrinfo(ip, port, &hints, &result) != 0) {
         std::cout << "gai" << std::endl;
         return false;
     }
     for (struct addrinfo* rp = result; rp != NULL; rp = rp->ai_next) {
-        clientSd = socket(rp->ai_family, SOCK_STREAM, 0);
-        if (clientSd == -1)
+        sock = socket(rp->ai_family, rp->ai_socktype, 0);
+        if (sock == -1) {
             continue;
-
-        if (connect(clientSd, rp->ai_addr, rp->ai_addrlen) < 0) {
-            std::cout << "cant connect to server, try again later maybe" << std::endl;
-            td = "cant connect to server, try again later maybe";
-            yon = true;
-            return false;
+        } 
+        else if (cnnct == true) {
+            if (connect(sock, rp->ai_addr, rp->ai_addrlen) < 0) {
+                std::cout << "cant connect to server, try again later maybe" << std::endl;
+                td = "cant connect to server, try again later maybe";
+                yon = true;
+                return false;
+            }
+            else {
+                td = "..waiting for server";
+                yon = true;
+                return true;
+            }
         }
         else {
-            td = "..waiting for server";
-            yon = true;
-            break;
+            if (bind(sock, (struct sockaddr*)&rp->ai_addr, rp->ai_addrlen) < 0) {
+                std::cerr << "cantbind, maybe try another port" << std::endl;
+                td = "cantbind, maybe try another port";
+                yon = true;
+                return false;
+            }
+            else {
+                return true;
+            }
         }
         close(clientSd);
     }
-    return true;
+    return false;
 
     /*svAddr.sin6_addr.s6_addr = inet_addr(inet_ntoa(*(struct in6_addr*)*svhost->h_addr_list));
     svAddr.sin6_port = htons(svport);
@@ -403,7 +425,7 @@ void SimpleRenderer::SSS(const char* aa) {
 
 
     char svmsg[50], svmsg1[128], svmsg2[10], svmsg3[10], svmsg4[128];
-    sockaddr_in sendSockAddr, myAddr;
+    //sockaddr_in sendSockAddr, myAddr;
 
     tcpSd = socket(AF_INET, SOCK_STREAM, 0);
     if (tcpSd == -1) {
@@ -438,7 +460,7 @@ void SimpleRenderer::SSS(const char* aa) {
     }
     const char* pt0 = svmsg1;
     std::cout << svmsg1 << "(bytes:" << f1 << ")" << std::endl;
-    std::cout << pt0 << std::endl;
+    //std::cout << pt0 << std::endl;
 
 
     f2 = recv(clientSd, (char*)&svmsg2, sizeof(svmsg2), 0);
@@ -448,7 +470,7 @@ void SimpleRenderer::SSS(const char* aa) {
 
     const char* pt = svmsg2;
     std::cout << svmsg2 << "(bytes:" << f2 << ")" << std::endl;
-    std::cout << pt << std::endl;
+    //std::cout << pt << std::endl;
 
 
     f3 = recv(clientSd, (char*)&svmsg3, sizeof(svmsg3), 0);
@@ -459,26 +481,33 @@ void SimpleRenderer::SSS(const char* aa) {
 
     const char* pt2 = svmsg3;
     std::cout << svmsg3 << "(bytes:" << f3 << ")" << std::endl;
-    std::cout << pt2 << std::endl;
+    //std::cout << pt2 << std::endl;
 
     //create a message buffer 
-    char msg[1500]; sport = atoi(pt); rport = atoi(pt2);
+    char msg[1500];
     //setup a socket and connection tools 
-    struct hostent* host = gethostbyname(pt0);
 
-    socklen_t ssz = sizeof(sendSockAddr);
+    /*socklen_t ssz = sizeof(sendSockAddr);
     bzero((char*)&sendSockAddr, sizeof(sendSockAddr));
-    sendSockAddr.sin_family = AF_INET;
-    sendSockAddr.sin_addr.s_addr = inet_addr(inet_ntoa(*(struct in_addr*)*host->h_addr_list));
-    sendSockAddr.sin_port = htons(sport);
+    sendSockAddr.sin6_family = AF_INET;
+    sendSockAddr.sin6_addr.s6_addr = inet_addr(inet_ntoa(*(struct in_addr*)*host->h_addr_list));
+    sendSockAddr.sin_port = htons(sport);*/
 
-    bzero((char*)&myAddr, sizeof(myAddr));
-    myAddr.sin_family = AF_INET;
-    myAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    myAddr.sin_port = htons(rport);
+    struct addrinfo  hints1;
+    struct addrinfo* sendAd;
+    //sockaddr6_in svAddr;
+    bzero((char*)&hints1, sizeof(hints1));
+    hints1.ai_family = AF_UNSPEC;
+    hints1.ai_socktype = SOCK_DGRAM;
+    //hints.ai_protocol = 0;
+    hints1.ai_next = NULL;
+    if (getaddrinfo(pt0, pt, &hints1, &sendAd) != 0) {
+        std::cout << "gai 505" << std::endl;
+    }
+
 
     udpSd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (udpSd == -1) {
+    if (cnect(pt0, pt2, udpSd, SOCK_DGRAM, false) == false) {
         std::cout << "cantsocket" << std::endl;
         return;
     }
@@ -487,17 +516,11 @@ void SimpleRenderer::SSS(const char* aa) {
         std::cout << "prblm2" << std::endl;
     }
 
-    if (bind(udpSd, (struct sockaddr*)&myAddr, sizeof(myAddr)) < 0) {
-        std::cerr << "cantbind, maybe try another port" << std::endl;
-        td = "cantbind, maybe try another port";
-        yon = true;
-        return;
-    }
-
     std::promise<void> exitSignal1;
     std::future<void> futureObj1 = exitSignal1.get_future();
 
     std::thread t1;
+    sockaddr sendSockAddr = *(sendAd->ai_addr);
     t1 = std::thread(&SimpleRenderer::punch, this, sendSockAddr, std::move(futureObj1));
     std::cout << "punching.." << std::endl;
     td = "..connecting";
@@ -534,7 +557,7 @@ void SimpleRenderer::SSS(const char* aa) {
 
     std::thread t2;
 
-    if (bind(tcpSd, (struct sockaddr*)&myAddr, sizeof(myAddr)) == -1) {
+    if (cnect(pt0, pt2, tcpSd, SOCK_STREAM, false) == false) {
         std::cout << "cantbindtcp" << std::endl;
         td = "cantbindtcp";
         yon = true;
@@ -542,29 +565,23 @@ void SimpleRenderer::SSS(const char* aa) {
     }
 
     bool xc = false;
-
-    if (connect(tcpSd, (sockaddr*)&sendSockAddr, sizeof(sendSockAddr)) == -1) {
+    if (connect(tcpSd, (sockaddr*)&sendAd->ai_addr, sendAd->ai_addrlen) == false) {
 
         std::cout << errno << std::endl;
         close(tcpSd);
 
         std::cout << "cantconnect, retrying once.." << std::endl;
-        tcptd[0] = socket(AF_INET, SOCK_STREAM, 0);
-        if (tcptd[0] == -1) {
+        if (cnect(pt0, pt2, tcptd[0], SOCK_STREAM, false) == false) {
             std::cout << "canttcpsocket" << std::endl;
         }
         if (setsockopt(tcptd[0], SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
             std::cout << "prblm" << std::endl;
         }
-        if (bind(tcptd[0], (struct sockaddr*)&myAddr, sizeof(myAddr)) == -1) {
-            std::cout << "cantbindtcp" << std::endl;
-            return;
-        }
-        if (connect_with_timeout(tcptd[0], (sockaddr*)&sendSockAddr, sizeof(sendSockAddr), 100) == -1){
+        if (connect_with_timeout(tcptd[0], (sockaddr*)&sendAd->ai_addr, sendAd->ai_addrlen, 100) == -1){
 
             std::cout << errno << std::endl;
             std::cout << "cantconnect, retrying twice.." << std::endl;
-            tcptd[1] = socket(AF_INET, SOCK_STREAM, 0);
+            /*tcptd[1] = socket(AF_INET, SOCK_STREAM, 0);
             if (tcptd[1] == -1) {
                 std::cout << "canttcpsocket" << std::endl;
             }
@@ -577,7 +594,7 @@ void SimpleRenderer::SSS(const char* aa) {
             }
             if (connect_with_timeout(tcptd[1], (sockaddr*)&sendSockAddr, sizeof(sendSockAddr), 4000) != -1){
                 xc = true;
-            }
+            }*/
         }
         else {
             xc = true;

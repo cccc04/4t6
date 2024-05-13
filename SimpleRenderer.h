@@ -26,12 +26,13 @@ public:
     const char* rts();
     bool yn();
     void ync();
-    bool cnect(const char* ip);
+    bool cnect(const char* ip, const char* port, int sock, int tcud, bool cnnct);
     SimpleRenderer();
     bool yyn;
+    int clientSd;
 private:
     struct sockaddr_in6 smt();
-    void punch(sockaddr_in sendSockAddr, std::future<void> futureObj);
+    void punch(sockaddr sendSockAddr, std::future<void> futureObj);
     void pong();
     void snd(int tcpSd1);
     void rcv(int clientSd);
@@ -39,7 +40,6 @@ private:
     bool yon;
     int udpSd;
     int tcpSd;
-    int clientSd;
     int tcptd[200];
     std::string dt;
     std::string td;

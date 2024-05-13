@@ -13,7 +13,7 @@ int main(int argc, char* argv[]) {
     std::future<void> futureObj = exitSignal.get_future();
     t1 = std::thread([&] {while (futureObj.wait_for(std::chrono::milliseconds(1)) == std::future_status::timeout) { if (sp->yn() == true) { sp->ync(); std::cout << "R: " << sp->rts() << std::endl; } }});
     bool cflg;
-    cflg = sp->cnect(argv[1]);
+    cflg = sp->cnect(argv[1], "11111", sp->clientSd, SOCK_STREAM, true);
     while ( cflg == false) {
         std::string ss;
         do {
@@ -24,7 +24,7 @@ int main(int argc, char* argv[]) {
             exit(0);
         }
         else {
-            cflg = sp->cnect(argv[1]);
+            cflg = sp->cnect(argv[1], "11111", sp->clientSd, SOCK_STREAM, true);
         }
     }
     t2 = std::thread([&] { std::string ss; getline(std::cin, ss); do { sp->sts(ss.c_str()); } while (ss != "exit"); });
