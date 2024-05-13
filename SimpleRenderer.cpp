@@ -343,9 +343,9 @@ void SimpleRenderer::snd(int tcpSd1) {
 
 }
 
-bool SimpleRenderer::cnect(const char* ip, const char* port, int sock, int tcud, bool cnnct) {
+bool SimpleRenderer::cnect(const char* ip, const char* port, int &sock, int tcud, bool cnnct) {
 
-    if (tcud != SOCK_DGRAM || tcud != SOCK_STREAM) {
+    if (tcud != SOCK_DGRAM && tcud != SOCK_STREAM) {
         std::cout << "invalid tcud" << std::endl;
         return false;
     }
@@ -357,7 +357,7 @@ bool SimpleRenderer::cnect(const char* ip, const char* port, int sock, int tcud,
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = tcud;
     //hints.ai_protocol = 0;
-    if (cnnct == true){
+    if (cnnct == false){
         ip = NULL;
         hints.ai_canonname = NULL;
         hints.ai_addr = NULL;
@@ -369,10 +369,10 @@ bool SimpleRenderer::cnect(const char* ip, const char* port, int sock, int tcud,
     }
     for (struct addrinfo* rp = result; rp != NULL; rp = rp->ai_next) {
         sock = socket(rp->ai_family, rp->ai_socktype, 0);
-        if (sock == -1) {
+        if (sock == -1)
             continue;
-        } 
-        else if (cnnct == true) {
+
+        if (cnnct == true) {
             if (connect(sock, rp->ai_addr, rp->ai_addrlen) < 0) {
                 std::cout << "cant connect to server, try again later maybe" << std::endl;
                 td = "cant connect to server, try again later maybe";
