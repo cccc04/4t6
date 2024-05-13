@@ -576,27 +576,15 @@ void SimpleRenderer::SSS(const char* aa) {
         if (setsockopt(tcptd[0], SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
             std::cout << "prblm" << std::endl;
         }
-        if (cnect(pt0, pt2, tcptd[0], SOCK_STREAM, false) == false) {
-            std::cout << "canttcpsocket" << std::endl;
-        }
-        if (connect_with_timeout(tcptd[0], (sockaddr*)&sendAd->ai_addr, sendAd->ai_addrlen, 100) == -1){
+        tcptd[0] = socket(AF_INET6, SOCK_STREAM, 0);
+        if (connect_with_timeout(tcptd[0], (sockaddr*)&sendAd->ai_addr, sendAd->ai_addrlen, 1000) == -1){
 
             std::cout << errno << std::endl;
             std::cout << "cantconnect, retrying twice.." << std::endl;
-            /*tcptd[1] = socket(AF_INET, SOCK_STREAM, 0);
-            if (tcptd[1] == -1) {
-                std::cout << "canttcpsocket" << std::endl;
-            }
-            if (setsockopt(tcptd[1], SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-                std::cout << "prblm" << std::endl;
-            }
-            if (bind(tcptd[1], (struct sockaddr*)&myAddr, sizeof(myAddr)) == -1) {
-                std::cout << "cantbindtcp" << std::endl;
-                return;
-            }
+            tcptd[1] = socket(AF_INET6, SOCK_STREAM, 0);
             if (connect_with_timeout(tcptd[1], (sockaddr*)&sendSockAddr, sizeof(sendSockAddr), 4000) != -1){
                 xc = true;
-            }*/
+            }
         }
         else {
             xc = true;
