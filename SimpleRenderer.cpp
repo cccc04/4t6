@@ -582,7 +582,7 @@ void SimpleRenderer::SSS(const char* aa) {
             std::cout << errno << std::endl;
             std::cout << "cantconnect, retrying twice.." << std::endl;
             tcptd[1] = socket(AF_INET6, SOCK_STREAM, 0);
-            if (connect_with_timeout(tcptd[1], (sockaddr*)&sendSockAddr, sizeof(sendSockAddr), 4000) != -1){
+            if (connect_with_timeout(tcptd[1], (sockaddr*)&sendAd->ai_addr, sendAd->ai_addrlen, 4000) != -1){
                 xc = true;
             }
         }
