@@ -402,7 +402,7 @@ void SimpleRenderer::SSS(const char* aa) {
 
 
 
-    char svmsg[50], svmsg1[30], svmsg2[10], svmsg3[10], svmsg4[128];
+    char svmsg[50], svmsg1[128], svmsg2[10], svmsg3[10], svmsg4[128];
     sockaddr_in sendSockAddr, myAddr;
 
     tcpSd = socket(AF_INET, SOCK_STREAM, 0);

@@ -271,7 +271,7 @@ int acpt() {
         std::cerr << "Error accepting request from client!" << std::endl;
         exit(1);
     }
-    char str[INET_ADDRSTRLEN];
+    char str[INET6_ADDRSTRLEN];
     std::cout << "Connected with client!" << std::endl;
     std::cout << inet_ntop(AF_INET6, &(newSockAddr.sin6_addr.s6_addr), str, INET6_ADDRSTRLEN) << ":" << newSockAddr.sin6_port << std::endl;
 
