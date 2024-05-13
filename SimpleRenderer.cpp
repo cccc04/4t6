@@ -372,10 +372,11 @@ bool SimpleRenderer::cnect(const char* ip) {
         else {
             td = "..waiting for server";
             yon = true;
-            return true;
+            break;
         }
         close(clientSd);
     }
+    return true;
 
     /*svAddr.sin6_addr.s6_addr = inet_addr(inet_ntoa(*(struct in6_addr*)*svhost->h_addr_list));
     svAddr.sin6_port = htons(svport);
@@ -401,7 +402,7 @@ void SimpleRenderer::SSS(const char* aa) {
 
 
 
-    char svmsg[50], svmsg1[30], svmsg2[10], svmsg3[10], svmsg4[50];
+    char svmsg[50], svmsg1[30], svmsg2[10], svmsg3[10], svmsg4[128];
     sockaddr_in sendSockAddr, myAddr;
 
     tcpSd = socket(AF_INET, SOCK_STREAM, 0);
@@ -415,13 +416,13 @@ void SimpleRenderer::SSS(const char* aa) {
         std::cout << "prblm" << std::endl;
     }
 
-    const char* tgtip = aa; char abb[INET_ADDRSTRLEN];
+    const char* tgtip = aa; char abb[INET6_ADDRSTRLEN];
     memset(&svmsg, 0, sizeof(svmsg));//clear the buffer
     strcpy(svmsg, tgtip);
-    send(clientSd, (char*)&svmsg, strlen(svmsg), 0);
+    send(clientSd, (char*)&svmsg, sizeof(svmsg), 0);
     memset(&svmsg4, 0, sizeof(svmsg4));
-    sockaddr_in fm = smt();
-    strcpy(svmsg4, inet_ntop(AF_INET, &(fm.sin_addr.s_addr), abb, INET_ADDRSTRLEN));
+    sockaddr_in6 fm = smt();
+    strcpy(svmsg4, inet_ntop(AF_INET6, &(fm.sin6_addr.s6_addr), abb, INET6_ADDRSTRLEN));
     sleep(1);
     send(clientSd, (char*)svmsg4, sizeof(svmsg4), 0);
     bzero((char*)&fm, sizeof(fm));

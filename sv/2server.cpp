@@ -22,7 +22,7 @@
 //Server side
 std::vector<std::string> tmp(50);
 std::vector<std::string> tmp1(50);
-sockaddr_in tsk[50];
+sockaddr_in6 tsk[50];
 int newSd[50];
 std::thread t[50];
 int serverSd;
@@ -191,9 +191,9 @@ void syc(int newSd, char msg[], char* msg1[], char* msg2[], sockaddr_in tsk) {
 
 }
 
-int lsn(int j, sockaddr_in newSockAddr) {
+int lsn(int j, sockaddr_in6 newSockAddr) {
 
-    char msg[30], msg6[51];
+    char msg[50], msg6[51];
     memset(&msg, 0, sizeof(msg));
 
     if (recv(newSd[j], (char*)&msg, sizeof(msg), 0) > 0) {
@@ -243,7 +243,7 @@ int lsn(int j, sockaddr_in newSockAddr) {
 }
 
 int acpt() {
-    sockaddr_in newSockAddr;
+    sockaddr_in6 newSockAddr;
     bzero((char*)&newSockAddr, sizeof(newSockAddr));
     socklen_t newSockAddrSize = sizeof(newSockAddr);
     int j;
@@ -273,7 +273,7 @@ int acpt() {
     }
     char str[INET_ADDRSTRLEN];
     std::cout << "Connected with client!" << std::endl;
-    std::cout << inet_ntop(AF_INET, &(newSockAddr.sin_addr.s_addr), str, INET_ADDRSTRLEN) << ":" << ntohs(newSockAddr.sin_port) << std::endl;
+    std::cout << inet_ntop(AF_INET6, &(newSockAddr.sin6_addr.s6_addr), str, INET6_ADDRSTRLEN) << ":" << newSockAddr.sin6_port << std::endl;
 
     tmp[j] = "aavavgaagggggggg";
     tsk[j] = newSockAddr;
@@ -291,26 +291,25 @@ int main(int argc, char* argv[])
     //grab the port number
     int port = atoi(argv[1]);
     //buffer to send and receive messages with
-    char msg[30], msg1[10], msg2[10], msg3[30], msg4[10], msg5[10];
+    char msg[128], msg1[10], msg2[10], msg3[128], msg4[10], msg5[10];
 
     //setup a socket and connection tools
-    sockaddr_in servAddr;
+    sockaddr_in6 servAddr;
     bzero((char*)&servAddr, sizeof(servAddr));
-    servAddr.sin_family = AF_INET;
-    servAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    servAddr.sin_port = htons(port);
+    servAddr.sin6_family = AF_INET6;
+    servAddr.sin6_addr= in6addr_any;
+    servAddr.sin6_port = htons(port);
 
     //open stream oriented socket with internet address
     //also keep track of the socket descriptor
-    serverSd = socket(AF_INET, SOCK_STREAM, 0);
+    serverSd = socket(AF_INET6, SOCK_STREAM, 0);
     if (serverSd < 0)
     {
         std::cerr << "Error establishing the server socket" << std::endl;
         exit(0);
     }
     //bind the socket to its local address
-    int bindStatus = bind(serverSd, (struct sockaddr*)&servAddr,
-        sizeof(servAddr));
+    int bindStatus = bind(serverSd, (struct sockaddr*)&servAddr, sizeof(servAddr));
     if (bindStatus < 0)
     {
         std::cerr << "Error binding socket to local address" << std::endl;
@@ -399,23 +398,23 @@ int main(int argc, char* argv[])
                                 memset(&msg1, 0, sizeof(msg1));//clear the buffer
                                 memset(&msg2, 0, sizeof(msg2));//clear the buffer
 
-                                data1 = std::to_string(ntohs(tsk[j].sin_port));
-                                data2 = std::to_string(ntohs(tsk[i].sin_port));
-                                datac1 = inet_ntop(AF_INET, &(tsk[j].sin_addr.s_addr), str1, INET_ADDRSTRLEN);
-                                datac2 = inet_ntop(AF_INET, &(tsk[i].sin_addr.s_addr), str2, INET_ADDRSTRLEN);
+                                data1 = tsk[j].sin6_port;
+                                data2 = tsk[i].sin6_port;
+                                datac1 = inet_ntop(AF_INET, &(tsk[j].sin6_addr.s6_addr), str1, INET6_ADDRSTRLEN);
+                                datac2 = inet_ntop(AF_INET, &(tsk[i].sin6_addr.s6_addr), str2, INET6_ADDRSTRLEN);
                                 if (datac1 == datac2) {
                                     strcpy(msg, tmp1[j].c_str());
                                     std::cout << "lc : " << std::endl;
                                 }
 
-                                else if ((datac1.find("10.0.0.") != std::string::npos) && (datac2.find("10.0.0.") == std::string::npos)) {
+                                else if ((datac1.find("192.168.1.") != std::string::npos) && (datac2.find("192.168.1.") == std::string::npos)) {
 
                                     strcpy(msg, oip.c_str());
 
                                 }
                                 else {
 
-                                    strcpy(msg, inet_ntop(AF_INET, &(tsk[j].sin_addr.s_addr), str1, INET_ADDRSTRLEN));
+                                    strcpy(msg, inet_ntop(AF_INET6, &(tsk[j].sin6_addr.s6_addr), str1, INET6_ADDRSTRLEN));
 
                                 }
 
@@ -423,14 +422,14 @@ int main(int argc, char* argv[])
                                     strcpy(msg3, tmp1[i].c_str());
                                     std::cout << "lc : " << std::endl;
                                 }
-                                else if ((datac1.find("10.0.0.") == std::string::npos) && (datac2.find("10.0.0.") != std::string::npos)) {
+                                else if ((datac1.find("192.168.1.") == std::string::npos) && (datac2.find("192.168.1.") != std::string::npos)) {
 
                                     strcpy(msg3, oip.c_str());
 
                                 }
                                 else {
 
-                                    strcpy(msg3, inet_ntop(AF_INET, &(tsk[i].sin_addr.s_addr), str2, INET_ADDRSTRLEN));
+                                    strcpy(msg3, inet_ntop(AF_INET6, &(tsk[i].sin6_addr.s6_addr), str2, INET6_ADDRSTRLEN));
 
                                 }
                                 strcpy(msg1, data1.c_str());
