@@ -388,7 +388,7 @@ bool SimpleRenderer::cnect(const char* ip, const char* port, int &sock, int tcud
             }
         }
         else {
-            if (bind(sock, (struct sockaddr*)&rp->ai_addr, rp->ai_addrlen) < 0) {
+            if (bind(sock, rp->ai_addr, rp->ai_addrlen) < 0) {
                 std::cerr << "393: cantbind, maybe try another port" << std::endl;
                 td = "cantbind, maybe try another port";
                 yon = true;
@@ -499,8 +499,8 @@ void SimpleRenderer::SSS(const char* aa) {
     struct addrinfo* sendAd;
     //sockaddr6_in svAddr;
     bzero((char*)&hints1, sizeof(hints1));
-    hints1.ai_family = AF_UNSPEC;
-    hints1.ai_socktype = SOCK_DGRAM;
+    hints1.ai_family = AF_INET6;
+    hints1.ai_socktype = SOCK_STREAM;
     //hints.ai_protocol = 0;
     hints1.ai_next = NULL;
     if (getaddrinfo(pt0, pt, &hints1, &sendAd) != 0) {
@@ -555,34 +555,34 @@ void SimpleRenderer::SSS(const char* aa) {
             t1.join();
             break;
         }
-    }
+    }*/
 
     if (cnect(pt0, pt2, tcpSd, SOCK_STREAM, false) == false) {
         std::cout << "cantbindtcp" << std::endl;
         td = "cantbindtcp";
         yon = true;
         return;
-    }*/
+    }
 
     std::thread t2;
 
     bool xc = false;
-    if (cnect(pt0, pt2, tcpSd, SOCK_STREAM, true) == false) {
+    if (cnect(pt0, pt, tcpSd, SOCK_STREAM, true) == false) {
 
         std::cout << errno << std::endl;
         close(tcpSd);
 
         std::cout << "cantconnect, retrying once.." << std::endl;
+        tcptd[0] = socket(AF_INET6, SOCK_STREAM, 0);
         if (setsockopt(tcptd[0], SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
             std::cout << "prblm" << std::endl;
         }
-        tcptd[0] = socket(AF_INET6, SOCK_STREAM, 0);
-        if (connect_with_timeout(tcptd[0], (sockaddr*)&sendAd->ai_addr, sendAd->ai_addrlen, 1000) == -1){
+        if (connect_with_timeout(tcptd[0], sendAd->ai_addr, sendAd->ai_addrlen, 1000) == -1){
 
             std::cout << errno << std::endl;
             std::cout << "cantconnect, retrying twice.." << std::endl;
             tcptd[1] = socket(AF_INET6, SOCK_STREAM, 0);
-            if (connect_with_timeout(tcptd[1], (sockaddr*)&sendAd->ai_addr, sendAd->ai_addrlen, 4000) != -1){
+            if (connect_with_timeout(tcptd[1], sendAd->ai_addr, sendAd->ai_addrlen, 4000) != -1){
                 xc = true;
             }
         }
