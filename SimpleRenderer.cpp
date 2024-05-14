@@ -447,11 +447,11 @@ void SimpleRenderer::SSS(const char* aa) {
     strcpy(svmsg, tgtip);
     send(clientSd, (char*)&svmsg, sizeof(svmsg), 0);
     memset(&svmsg4, 0, sizeof(svmsg4));
-    sockaddr_in6 fm = smt();
+    /*sockaddr_in6 fm = smt();
     strcpy(svmsg4, inet_ntop(AF_INET6, &(fm.sin6_addr.s6_addr), abb, INET6_ADDRSTRLEN));
     sleep(1);
     send(clientSd, (char*)svmsg4, sizeof(svmsg4), 0);
-    bzero((char*)&fm, sizeof(fm));
+    bzero((char*)&fm, sizeof(fm));*/
     int sport; int rport;
     memset(&svmsg1, 0, sizeof(svmsg1));
     memset(&svmsg2, 0, sizeof(svmsg2));

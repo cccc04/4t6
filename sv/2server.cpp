@@ -206,14 +206,14 @@ int lsn(int j, sockaddr_in6 newSockAddr) {
             sto.push_back(msg[i]);
 
         }
-        memset(&msg6, 0, sizeof(msg6));//clear the buffer
+        /*memset(&msg6, 0, sizeof(msg6));//clear the buffer
         if (recv(newSd[j], (char*)&msg6, sizeof(msg6), 0) <= 0) {
             std::cout << "cantown" << std::endl;
         }
         for (int i = 0; i < sizeof(msg6); i++) {
             sto1.push_back(msg6[i]);
         }
-        std::cout << sto1 << std::endl;
+        std::cout << sto1 << std::endl;*/
 
         if(sto.find("Relay845") != std::string::npos){
             memset(&msg6, 0, sizeof(msg6));//clear the buffer
@@ -439,9 +439,8 @@ int main(int argc, char* argv[])
                             /*thread aa, aaa;
                             aa = std::thread(syc, newSd[i], msg, msg1, msg2, tsk[i]);*/
                             int fgd = 0;
-                            usleep(20000);
                             do {
-                                a = sendto(newSd[i], (char*)msg, sizeof(msg), 0, (sockaddr*)&tsk[i], sizeof(tsk[i]));
+                                a = send(newSd[i], (char*)msg, sizeof(msg), 0);
                                 std::cout << msg << "(bytes:" << a << ")" << std::endl;
                                 fgd = errno;
                             } while (a <= 5);
@@ -449,8 +448,9 @@ int main(int argc, char* argv[])
                                 std::cout << "cl discnted\nerror: " << fgd << std::endl;
                                 fgd = 0;
                             }
+                            usleep(20000);
                             do {
-                                a3 = sendto(newSd[j], (char*)msg3, sizeof(msg3), 0, (sockaddr*)&tsk[j], sizeof(tsk[j]));
+                                a3 = send(newSd[j], (char*)msg3, sizeof(msg3), 0);
                                 std::cout << msg3 << "(bytes:" << a3 << ")" << std::endl;
                                 fgd = errno;
                             } while (a <= 5);
@@ -510,6 +510,10 @@ int main(int argc, char* argv[])
                         }
                     }
                 }
+                else {
+                    std::cout << "514: cl dscncted " << std::endl;
+                }
+
             }
             else {
                 usleep(1000);
