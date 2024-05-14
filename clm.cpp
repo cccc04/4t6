@@ -27,7 +27,7 @@ int main(int argc, char* argv[]) {
             cflg = sp->cnect(argv[1], "11111", sp->clientSd, SOCK_STREAM, true);
         }
     }
-    t2 = std::thread([&] { std::string ss; getline(std::cin, ss); do { sp->sts(ss.c_str()); } while (ss != "exit"); });
+    t2 = std::thread([&] { std::string ss;  do { getline(std::cin, ss); sp->sts(ss.c_str()); } while (ss != "exit"); });
     sp->SSS(argv[2]);
     exitSignal.set_value();
     t1.join();
