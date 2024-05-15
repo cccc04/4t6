@@ -7,7 +7,6 @@
 //#include "MathHelper.h"
 
 // These are used by the shader compilation methods.
-#include <vector>
 #include <iostream>
 #include <stdio.h>
 #include <sys/types.h>
@@ -34,7 +33,8 @@ SimpleRenderer::SimpleRenderer() {
     if (tcpSd == -1) {
         std::cout << "canttcpsocket" << std::endl;
     }
-
+    futureObjRtn = exitSignalRtn.get_future();
+    futureObjPong = exitSignalPong.get_future();
 }
 
 int SimpleRenderer::connect_with_timeout(int sockfd, const struct sockaddr* addr, socklen_t addrlen, unsigned int timeout_ms) {
@@ -225,24 +225,57 @@ void SimpleRenderer::rcv(int clientSd) {
 
 }
 
-void SimpleRenderer::pong() {
+bool SimpleRenderer::pong(int sock) {
+    char msg[1500], msgp[4], msgr[128];
 
-    char svmsg[15];
-    int i;
-    do {
-        i = recv(clientSd, (char*)&svmsg, sizeof(svmsg), 0);
-    } while (i <= 0);
-    std::string sr;
-    for (int i = 0; i < strlen(svmsg); i++) {
 
-        sr.push_back(svmsg[i]);
+    std::string es = "PONG";
+    strcpy(msgp, es.c_str());
 
+    struct timeval timeout;
+    timeout.tv_sec = 10;
+    timeout.tv_usec = 0;
+    std::string os;
+    if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+        std::cout << "284: tmotf1" << std::endl;
+        return false;
     }
-    if (sr.find("PING") != std::string::npos) {
-
-        send(clientSd, (char*)&svmsg, sizeof(svmsg), 0);
-
+    while (futureObjPong.wait_for(std::chrono::milliseconds(1)) == std::future_status::timeout) {
+        std::string s;
+        int i;
+        memset(&msg, 0, sizeof(msg));
+        i = recv(sock, (char*)&msg, sizeof(msg), 0);
+        for (int i = 0; i < strlen(msg); i++) {
+            s.push_back(msg[i]);
+        }
+        std::cout << "250: " << s << std::endl;
+        if (i <= 0) {
+            std::cout << "251: pong rcv t/o" << std::endl;
+            return false;
+        }
+        else if (s == "PING") {
+            if (send(sock, (char*)&msgp, sizeof(msgp), 0) < 0) {
+                std::cout << "257: f snd" << std::endl;
+                return false;
+            }
+        }
+        else {
+            if (s != "rtk") {
+                os = s;
+                memset(&msgr, 0, sizeof(msgr));
+                snprintf(msgr, sizeof(msgr), "%zu", s.size());
+                if (send(sock, (char*)msgr, sizeof(msgr), 0) < 0) {
+                    std::cout << "269: f snd" << std::endl;
+                    return false;
+                }
+            }
+            else {
+                std::lock_guard<std::mutex> guard(mutexpo);
+                gmsg.push_back(os);
+            }
+        }
     }
+    return true;
 }
 
 void SimpleRenderer::sts(const char* st) {
@@ -452,20 +485,20 @@ void SimpleRenderer::SSS(const char* aa) {
     sleep(1);
     send(clientSd, (char*)svmsg4, sizeof(svmsg4), 0);
     bzero((char*)&fm, sizeof(fm));*/
-    int sport; int rport;
-    memset(&svmsg1, 0, sizeof(svmsg1));
-    memset(&svmsg2, 0, sizeof(svmsg2));
-    memset(&svmsg3, 0, sizeof(svmsg3));
-    //pong();
+    pongt = std::async(&SimpleRenderer::pong, this, clientSd);
+
     std::vector<int> ff;
     std::vector<std::string> pt1;
     std::vector<size_t> size;
     ff = { 0,0,0 };
     pt1 = { "", "", ""};
     size = { 64,10,10 };
-    //svmsg13 = { &svmsg1, &svmsg2, &svmsg3 };
+    while (1) {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
     for (int i = 0; i < 3; i++) {
         do {
+            memset(&svmsg1, 0, sizeof(svmsg1));
             ff[i] = recv(clientSd, (char*)&svmsg1, size[i], 0);
             if (ff[i] < 0) {
                 std::cout << "didntrcv" << std::endl;

@@ -6,6 +6,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <vector>
+#include <list>
 
 #ifdef __APPLE__
 #include <unistd.h>
@@ -33,7 +35,7 @@ public:
 private:
     struct sockaddr_in6 smt();
     void punch(sockaddr sendSockAddr, std::future<void> futureObj);
-    void pong();
+    bool pong(int sock);
     void snd(int tcpSd1);
     void rcv(int clientSd);
     int connect_with_timeout(int sockfd, const struct sockaddr* addr, socklen_t addrlen, unsigned int timeout_ms);
@@ -43,4 +45,9 @@ private:
     int tcptd[200];
     std::string dt;
     std::string td;
+    std::list<std::string> gmsg;
+    std::mutex mutexpo;
+    std::future<bool> pongt;
+    std::promise<void> exitSignalPong, exitSignalRtn;
+    std::future<void> futureObjPong, futureObjRtn;
 };

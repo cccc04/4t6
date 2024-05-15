@@ -18,6 +18,8 @@
 #include <thread>
 #include <chrono>
 #include <future>
+#include <map>
+#include <list>
 //using namespace std;
 //Server side
 std::vector<std::string> tmp(50);
@@ -26,6 +28,11 @@ sockaddr_in6 tsk[50];
 int newSd[50];
 std::thread t[50];
 int serverSd;
+std::vector<std::list<std::string>> gmsg(50);
+std::mutex mutexpi, mutexpo;
+std::vector<std::future<bool>> pingt(50), pongt(50);
+std::vector<std::promise<void>> exitSignalPing(50), exitSignalPong(50);
+std::vector<std::future<void>> futureObjPing(50), futureObjPong(50);
 
 
 void rl(int newSd1, int newSd2) {
@@ -111,20 +118,32 @@ bool cmn(int newSd) {
     return yn;
 }
 
-void idp(int i, int j) {
+void idp(int i, int j, std::future<bool>* pingt1, std::future<bool>* pingt2, std::future<bool>* pongt1, std::future<bool>* pongt2) {
 
     bool cmn1 = cmn(newSd[i]);
     bool cmn2 = cmn(newSd[j]);
+    std::string s;
     std::cout << cmn1 << cmn2 << std::endl;
-    if (cmn1 == true && cmn2 == true) {
 
+    if (!pingt1->valid() || !pongt1->valid() || !pingt2->valid() || !pongt2->valid()) {
+        s = "121: pinger not alive";
+        cmn1 = true;
+        cmn2 = true;
+    }
+
+    if (cmn1 == true && cmn2 == true) {
+        s = "128: good";
         tmp[i].clear();
         tmp[j].clear();
         bzero((char*)&tsk[j], sizeof(tsk[j]));
         bzero((char*)&tsk[i], sizeof(tsk[i]));
         close(newSd[i]);
         close(newSd[j]);
-        std::cout << "good" << std::endl;
+        std::cout << "135: waiting ping1" << std::endl;
+        pingt1->wait();
+        std::cout << "137: waiting ping2" << std::endl;
+        pingt2->wait();
+        std::cout << s << std::endl;
     }
     else if(cmn1 == false && cmn2 == false){
 
@@ -193,6 +212,11 @@ void syc(int newSd, char msg[], char* msg1[], char* msg2[], sockaddr_in tsk) {
 
 int lsn(int j, sockaddr_in6 newSockAddr) {
 
+    if (j > 50 || j < 0) {
+        std::cout << "197: lsn invalid" << std::endl;
+        return -1;
+    }
+
     char msg[50], msg6[51];
     memset(&msg, 0, sizeof(msg));
 
@@ -242,6 +266,165 @@ int lsn(int j, sockaddr_in6 newSockAddr) {
     }
 }
 
+bool ping(int j) {
+    char msg[4];
+    std::string es = "PING";
+    strcpy(msg, es.c_str());
+    while (futureObjPing[j].wait_for(std::chrono::milliseconds(1)) == std::future_status::timeout) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+        std::lock_guard<std::mutex> guard(mutexpi);
+        if (send(newSd[j], (char*)&msg, sizeof(msg), 0) < 0) {
+            std::cout << "264: f snd" << std::endl;
+            return false;
+        }
+    }
+    return true;
+}
+
+bool pong( int j) {
+    char msg[1500];
+
+    struct timeval timeout;
+    timeout.tv_sec = 10;
+    timeout.tv_usec = 0;
+    if (setsockopt(newSd[j], SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+        std::cout << "284: tmotf1" << std::endl;
+        return false;
+    }
+    while (futureObjPong[j].wait_for(std::chrono::milliseconds(1)) == std::future_status::timeout) {
+        std::string s;
+        int i;
+        memset(&msg, 0, sizeof(msg));
+        i = recv(newSd[j], (char*)&msg, sizeof(msg), 0);
+        for (int i = 0; i < strlen(msg); i++) {
+            s.push_back(msg[i]);
+        }
+        std::cout << "298: " << s << std::endl;
+        if ( i <= 0) {
+            std::cout << "290: pong rcv t/o" << std::endl;
+            exitSignalPing[j].set_value();
+            return false;
+        }
+        else if(s == "PONG") {
+            continue;
+        }
+        else {
+            std::lock_guard<std::mutex> guard(mutexpo);
+            gmsg[j].push_back(s);
+        }
+    }
+    return true;
+}
+
+bool checkalive(int i, int j){
+    if (tmp[i].empty() && tmp[j].empty()) {
+        return false;
+    }
+    else if (tmp[i].empty()) {
+        std::cout << "broken" << std::endl;
+        exit(0);
+    }
+    bool b1, b2;
+    b1 = pongt[j].wait_for(std::chrono::microseconds(1)) != std::future_status::timeout;
+    b2 = pongt[i].wait_for(std::chrono::microseconds(1)) != std::future_status::timeout;
+    if (b1 || b2) {
+
+        if (b1 && b2) {
+            std::cout << "cl:" << i << "&" << j << "discnted" << std::endl;
+        }
+        else if (b1) {
+            std::cout << "cl: " << j << "discnted" << std::endl;
+        }
+        else {
+            std::cout << "cl: " << i << "discnted" << std::endl;
+        }
+        if (futureObjPing[i].wait_for(std::chrono::microseconds(1)) != std::future_status::timeout) {
+            exitSignalPing[i].set_value();
+            futureObjPing[i].wait();
+        }
+        if (futureObjPong[i].wait_for(std::chrono::microseconds(1)) != std::future_status::timeout) {
+            exitSignalPong[i].set_value();
+            futureObjPong[i].wait();
+        }
+        if (futureObjPing[j].wait_for(std::chrono::microseconds(1)) != std::future_status::timeout) {
+            exitSignalPing[j].set_value();
+            futureObjPing[j].wait();
+        }
+        if (futureObjPong[j].wait_for(std::chrono::microseconds(1)) != std::future_status::timeout) {
+            exitSignalPong[j].set_value();
+            futureObjPong[j].wait();
+        }
+
+        std::cout << "479: waiting for pinger" << std::endl;
+        pongt[j].wait();
+        pongt[i].wait();
+        pingt[j].wait();
+        pingt[i].wait();
+        exitSignalPing[i] = std::promise<void>{};
+        exitSignalPong[i] = std::promise<void>{};
+        exitSignalPing[j] = std::promise<void>{};
+        exitSignalPong[j] = std::promise<void>{};
+        futureObjPing[i] = exitSignalPing[i].get_future();
+        futureObjPong[i] = exitSignalPong[i].get_future();
+        futureObjPing[j] = exitSignalPing[j].get_future();
+        futureObjPong[j] = exitSignalPong[j].get_future();
+
+        close(newSd[i]);
+        close(newSd[j]);
+        tmp[i].clear();
+        tmp1[i].clear();
+        tmp[j].clear();
+        tmp1[j].clear();
+        return false;
+    }
+    else {
+        return true;
+    }
+}
+
+bool gsend(std::string &data, int buffersize, int i, int j) {
+    int fgd = 0;
+    int a;
+    char msg[buffersize], msg1[3];
+    std::string s = "rtk";
+    strcpy(msg, data.c_str());
+    strcpy(msg1, s.c_str());
+    while (1) {
+        if (gmsg[i].empty()) {
+            if (!checkalive(i, j)) {
+                return false;
+            }
+            a = send(newSd[i], (char*)msg, sizeof(msg), 0);
+            std::cout << msg << "(bytes:" << a << ")" << std::endl;
+            fgd = errno;
+            if (fgd != 0) {
+                std::cout << "379: error: " << fgd << std::endl;
+                fgd = 0;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        }
+        else {
+            std::lock_guard<std::mutex> guard(mutexpo);
+            std::string lcs = gmsg[i].front();
+            std::string msize;
+            char cmsize[128];
+            memset(&cmsize, 0, sizeof(cmsize));
+            snprintf(cmsize, sizeof(cmsize), "%zu", data.size());
+            for (int k = 0; k < strlen(cmsize); k++) {
+                msize.push_back(cmsize[k]);
+            }
+            if (lcs != msize) {
+                gmsg[i].pop_front();
+            }
+            else {
+                send(newSd[i], (char*)msg1, sizeof(msg1), 0);
+                return true;
+            }
+        }
+    }
+
+}
+
 int acpt() {
     sockaddr_in6 newSockAddr;
     bzero((char*)&newSockAddr, sizeof(newSockAddr));
@@ -275,6 +458,11 @@ int acpt() {
     std::cout << "Connected with client!" << std::endl;
     std::cout << inet_ntop(AF_INET6, &(newSockAddr.sin6_addr.s6_addr), str, INET6_ADDRSTRLEN) << ":" << ntohs(newSockAddr.sin6_port) << std::endl;
 
+    int yes = 1;
+    if (setsockopt(newSd[j], SOL_SOCKET, SO_KEEPALIVE, &yes, sizeof(int)) == -1) {
+        std::cout << "KAL fail" << std::endl;
+    }
+
     tmp[j] = "aavavgaagggggggg";
     tsk[j] = newSockAddr;
     return j;
@@ -288,6 +476,12 @@ int main(int argc, char* argv[])
         std::cerr << "Usage: port" << std::endl;
         exit(0);
     }
+
+    for (int i = 0; i < 50; i++) {
+        futureObjPing[i] = exitSignalPing[i].get_future();
+        futureObjPong[i] = exitSignalPong[i].get_future();
+    }
+
     //grab the port number
     int port = atoi(argv[1]);
     //buffer to send and receive messages with
@@ -318,7 +512,7 @@ int main(int argc, char* argv[])
     std::thread iput(input);
     //accept, create a new socket descriptor to 
     //handle the new connection with client
-    int j;
+    int j = 0;
     std::vector<std::future<int>> fut(51);
 
 
@@ -334,8 +528,10 @@ int main(int argc, char* argv[])
                 char str1[INET6_ADDRSTRLEN], str2[INET6_ADDRSTRLEN];
                 oip = "221.223.91.112";
                 j = fut[k].get();
+                pingt[j] = std::async(ping, j);
+                pongt[j] = std::async(pong, j);
 
-                if (j > 0) {
+                if (j >= 0) {
                     for (int i = 0; i < 50; i++) {
                         if (tmp[j] == tmp[i] && i != j) {
                             std::cout << "i: " << i << std::endl;
@@ -343,7 +539,7 @@ int main(int argc, char* argv[])
                             std::cout << tmp[i] << std::endl;
                             tmp[i] = "anviouajsdfija7129408489uhnaidf";
                             tmp[j] = "anviouajsdfija7129408489uhnaidf";
-                            struct timeval timeout, timeout1;
+                            /*struct timeval timeout, timeout1;
                             timeout.tv_sec = 2;
                             timeout.tv_usec = 0;
                             if (setsockopt(newSd[i], SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
@@ -354,12 +550,6 @@ int main(int argc, char* argv[])
                             }
                             memset(&msg2, 0, sizeof(msg2));
                             memset(&msg3, 0, sizeof(msg3));
-                            /*std::string es = "PING";
-                            strcpy(msg2, es.c_str());
-                            send(newSd[i], (char*)&msg2, sizeof(msg2), 0);
-                            send(newSd[j], (char*)&msg2, sizeof(msg2), 0);
-                            memset(&msg2, 0, sizeof(msg2));*/
-                            if (recv(newSd[i], (char*)&msg2, sizeof(msg2), 0) <= 0) {
                                 std::cout << "cl discnted" << std::endl;
                                 close(newSd[i]);
                                 close(newSd[j]);
@@ -381,15 +571,12 @@ int main(int argc, char* argv[])
                                 tmp1[j].clear();
                                 flg1 = true;
                                 break;
+                            }*/
+                            if (!checkalive(i,j)) {
+                                flg1 = true;
+                                break;
                             }
-                            timeout1.tv_sec = 1000000;
-                            timeout1.tv_usec = 0;
-                            if (setsockopt(newSd[i], SOL_SOCKET, SO_RCVTIMEO, &timeout1, sizeof(timeout1)) < 0) {
-                                std::cout << "tmotf1" << std::endl;
-                            }
-                            if (setsockopt(newSd[j], SOL_SOCKET, SO_RCVTIMEO, &timeout1, sizeof(timeout1)) < 0) {
-                                std::cout << "tmotf2" << std::endl;
-                            }
+
                             memset(&msg3, 0, sizeof(msg3));//clear the buffer
                             memset(&msg4, 0, sizeof(msg4));//clear the buffer
                             memset(&msg5, 0, sizeof(msg5));//clear the buffer
@@ -435,20 +622,34 @@ int main(int argc, char* argv[])
                             strcpy(msg2, data2.c_str());
                             strcpy(msg4, data2.c_str());
                             strcpy(msg5, data1.c_str());
-                            int a, a1, a2, a3, a4, a5, a6;
-                            /*thread aa, aaa;
+                            /*int a, a1, a2, a3, a4, a5, a6;
+                            thread aa, aaa;
                             aa = std::thread(syc, newSd[i], msg, msg1, msg2, tsk[i]);*/
-                            int fgd = 0;
-                            do {
-                                a = send(newSd[i], (char*)msg, sizeof(msg), 0);
-                                std::cout << msg << "(bytes:" << a << ")" << std::endl;
-                                fgd = errno;
-                            } while (a <= 5);
-                            if (fgd != 0) {
-                                std::cout << "cl discnted\nerror: " << fgd << std::endl;
-                                fgd = 0;
+                            bool bnb = false;
+                            std::string data3 = inet_ntop(AF_INET6, &(tsk[i].sin6_addr.s6_addr), str2, INET6_ADDRSTRLEN);
+                            std::string data = inet_ntop(AF_INET6, &(tsk[j].sin6_addr.s6_addr), str1, INET6_ADDRSTRLEN);
+                            if (gsend(data, 64, i, j) != false) {
+                                if (gsend(data3, 64, j, i) != false) {
+                                    if (gsend(data1, 10, i, j) != false) {
+                                        if (gsend(data2, 10, j, i) != false) {
+                                            if (gsend(data2, 10, i, j) != false) {
+                                                if (gsend(data1, 10, j, i) != false) {
+                                                    bnb = true;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
-                            usleep(20000);
+                            if (bnb == false) {
+                                break;
+                            }
+                            else {
+                                exitSignalPing[i].set_value();
+                                std::cout << checkalive(i, j) << std::endl;
+                                break;
+                            }
+                            /*usleep(20000);
                             do {
                                 a3 = send(newSd[j], (char*)msg3, sizeof(msg3), 0);
                                 std::cout << msg3 << "(bytes:" << a3 << ")" << std::endl;
@@ -491,7 +692,7 @@ int main(int argc, char* argv[])
                             if (fgd != 0) {
                                 std::cout << "cl discnted\nerror: " << fgd << std::endl;
                                 fgd = 0;
-                            }
+                            }*/
                             //usleep(100000);
 
                             /*aaa = std::thread(syc, newSd[j], msg3, msg4, msg5, newSockAddr);*/
@@ -504,7 +705,7 @@ int main(int argc, char* argv[])
 
                             tmp1[i].clear();
                             tmp1[j].clear();
-                            t[j] = std::thread(idp, i, j);
+                            t[j] = std::thread(&idp, i, j, &(pingt[i]), &(pingt[j]), &(pongt[i]), &(pongt[j]));
                             flg1 = true;
                             break;
                         }
