@@ -231,9 +231,10 @@ bool SimpleRenderer::pong(int sock) {
 
     std::string es = "PONG";
     strcpy(msgp, es.c_str());
+    send(sock, (char*)&msgp, sizeof(msgp), 0);
 
     struct timeval timeout;
-    timeout.tv_sec = 10;
+    timeout.tv_sec = 5;
     timeout.tv_usec = 0;
     std::string os;
     if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
@@ -250,7 +251,7 @@ bool SimpleRenderer::pong(int sock) {
         }
         std::cout << "250: " << s << std::endl;
         if (i <= 0) {
-            std::cout << "251: pong rcv t/o" << std::endl;
+            std::cout << "251: ping rcv t/o" << std::endl;
             return false;
         }
         else if (s == "PING") {

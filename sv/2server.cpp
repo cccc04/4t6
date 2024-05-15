@@ -271,7 +271,7 @@ bool ping(int j) {
     std::string es = "PING";
     strcpy(msg, es.c_str());
     while (futureObjPing[j].wait_for(std::chrono::milliseconds(1)) == std::future_status::timeout) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         std::lock_guard<std::mutex> guard(mutexpi);
         if (send(newSd[j], (char*)&msg, sizeof(msg), 0) < 0) {
             std::cout << "264: f snd" << std::endl;
@@ -285,7 +285,7 @@ bool pong( int j) {
     char msg[1500];
 
     struct timeval timeout;
-    timeout.tv_sec = 10;
+    timeout.tv_sec = 5;
     timeout.tv_usec = 0;
     if (setsockopt(newSd[j], SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
         std::cout << "284: tmotf1" << std::endl;
@@ -302,7 +302,10 @@ bool pong( int j) {
         std::cout << "298: " << s << std::endl;
         if ( i <= 0) {
             std::cout << "290: pong rcv t/o" << std::endl;
-            exitSignalPing[j].set_value();
+            if (futureObjPing[j].wait_for(std::chrono::milliseconds(1)) == std::future_status::timeout) {
+                exitSignalPing[j].set_value();
+                pingt[j].wait();
+            }
             return false;
         }
         else if(s == "PONG") {
@@ -325,8 +328,8 @@ bool checkalive(int i, int j){
         exit(0);
     }
     bool b1, b2;
-    b1 = pongt[j].wait_for(std::chrono::microseconds(1)) != std::future_status::timeout;
-    b2 = pongt[i].wait_for(std::chrono::microseconds(1)) != std::future_status::timeout;
+    b1 = pongt[j].wait_for(std::chrono::microseconds(1)) == std::future_status::ready;
+    b2 = pongt[i].wait_for(std::chrono::microseconds(1)) == std::future_status::ready;
     if (b1 || b2) {
 
         if (b1 && b2) {
@@ -338,19 +341,19 @@ bool checkalive(int i, int j){
         else {
             std::cout << "cl: " << i << "discnted" << std::endl;
         }
-        if (futureObjPing[i].wait_for(std::chrono::microseconds(1)) != std::future_status::timeout) {
+        if (futureObjPing[i].wait_for(std::chrono::microseconds(1)) == std::future_status::timeout) {
             exitSignalPing[i].set_value();
             futureObjPing[i].wait();
         }
-        if (futureObjPong[i].wait_for(std::chrono::microseconds(1)) != std::future_status::timeout) {
+        if (futureObjPong[i].wait_for(std::chrono::microseconds(1)) == std::future_status::timeout) {
             exitSignalPong[i].set_value();
             futureObjPong[i].wait();
         }
-        if (futureObjPing[j].wait_for(std::chrono::microseconds(1)) != std::future_status::timeout) {
+        if (futureObjPing[j].wait_for(std::chrono::microseconds(1)) == std::future_status::timeout) {
             exitSignalPing[j].set_value();
             futureObjPing[j].wait();
         }
-        if (futureObjPong[j].wait_for(std::chrono::microseconds(1)) != std::future_status::timeout) {
+        if (futureObjPong[j].wait_for(std::chrono::microseconds(1)) == std::future_status::timeout) {
             exitSignalPong[j].set_value();
             futureObjPong[j].wait();
         }
@@ -383,7 +386,7 @@ bool checkalive(int i, int j){
 }
 
 bool gsend(std::string &data, int buffersize, int i, int j) {
-    int fgd = 0;
+
     int a;
     char msg[buffersize], msg1[3];
     std::string s = "rtk";
@@ -395,13 +398,11 @@ bool gsend(std::string &data, int buffersize, int i, int j) {
                 return false;
             }
             a = send(newSd[i], (char*)msg, sizeof(msg), 0);
-            std::cout << msg << "(bytes:" << a << ")" << std::endl;
-            fgd = errno;
-            if (fgd != 0) {
-                std::cout << "379: error: " << fgd << std::endl;
-                fgd = 0;
+            std::cout <<"401: " << msg << "(bytes:" << a << ")" << std::endl;
+            if (a < 0) {
+                std::cout << "379: error: " << errno << std::endl;
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
         else {
             std::lock_guard<std::mutex> guard(mutexpo);
@@ -413,8 +414,9 @@ bool gsend(std::string &data, int buffersize, int i, int j) {
             for (int k = 0; k < strlen(cmsize); k++) {
                 msize.push_back(cmsize[k]);
             }
+            std::cout << "416: lcs: " << lcs << " msize: " << msize << std::endl;
+            gmsg[i].pop_front();
             if (lcs != msize) {
-                gmsg[i].pop_front();
             }
             else {
                 send(newSd[i], (char*)msg1, sizeof(msg1), 0);
@@ -645,8 +647,10 @@ int main(int argc, char* argv[])
                                 break;
                             }
                             else {
-                                exitSignalPing[i].set_value();
-                                std::cout << checkalive(i, j) << std::endl;
+                                exitSignalPong[i].set_value();
+                                pongt[i].wait();
+                                bool al = checkalive(i, j);
+                                std::cout << "658: " << al << std::endl;
                                 break;
                             }
                             /*usleep(20000);
