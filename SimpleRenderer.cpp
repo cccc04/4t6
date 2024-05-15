@@ -231,7 +231,9 @@ bool SimpleRenderer::pong(int sock) {
 
     std::string es = "PONG";
     strcpy(msgp, es.c_str());
-    send(sock, (char*)&msgp, sizeof(msgp), 0);
+    if (send(sock, (char*)&msgp, sizeof(msgp), 0) < 0) {
+        std::cout << "235: " << errno << std::endl;
+    }
 
     struct timeval timeout;
     timeout.tv_sec = 5;
