@@ -257,12 +257,13 @@ bool cmn(int i, int j) {
             for (auto it : gmsg[i].front()) {
                 sr.push_back(it);
             }
+            std::cout << "260: " << sr << std::endl;
             gmsg[i].pop_front();
         }
         if (sr.find("pcr") == 0) {
             break;
         }
-        else if (sr.find("oc") == 0) {
+        if (sr.find("fu") == 0) {
             std::cout << "266: fd" << std::endl;
             gsend("sv", 6, i, j);
             gsend("cl", 6, j, i);
@@ -291,8 +292,8 @@ bool cmn(int i, int j) {
 
 void idp(int i, int j) {
 
+    bool cmn2 = cmn(j, i);
     bool cmn1 = cmn(i,j);
-    bool cmn2 = cmn(j,i);
     std::string s;
     std::cout << cmn1 << cmn2 << std::endl;
 
@@ -485,7 +486,7 @@ bool pong( int j) {
         }
         else {
             size_t sz;
-            if (s.find("xf") == 0 || s.find("Z ") == 0 || s.find("oc") == 0) {
+            if (s.find("xf") == 0 || s.find("Z ") == 0 /* || s.find("oc") == 0*/) {
                 sz = strlen(msg);
                 std::cout << "480: " << s << ": " << sz << std::endl;
             }

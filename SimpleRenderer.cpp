@@ -685,7 +685,7 @@ void SimpleRenderer::SSS(const char* aa) {
 
     bool xc = false;
     int* ptcpSd;
-    for(int q = 0; q < 1; q++){
+    for(int q = 0; q < 2; q++){
         if (pt1[3] == "sv") {
             sockaddr_in6 servAddr;
             bzero((char*)&servAddr, sizeof(servAddr));
@@ -760,10 +760,11 @@ void SimpleRenderer::SSS(const char* aa) {
                 thread.wait();
                 if (q == 0 ) {
                     std::lock_guard<std::mutex> guard(mutexpo);
-                    std::string srr = gmsg.front();
+                    std::string srrr = gmsg.front();
                     gmsg.pop_front();
-                    if (srr == "cl") {
-                        pt1[3] = srr;
+                    std::cout << "765: " << srrr << std::endl;
+                    if (srrr == "cl") {
+                        pt1[3] = srrr;
                         continue;
                     }
                     else {
@@ -810,7 +811,7 @@ void SimpleRenderer::SSS(const char* aa) {
                 if (xc == false) {
 
                     std::cout << errno << std::endl;
-                    std::cout << "cantconnect, relay" << std::endl;
+                    std::cout << "cantconnect" << std::endl;
                 }
 
             }
@@ -819,14 +820,13 @@ void SimpleRenderer::SSS(const char* aa) {
             }
             if (xc == false) {
                 if (q == 0) {
-                    char msgq[5];
-                    memset(&msgq, 0, sizeof(msgq));
-                    std::string qs = "oc";
-                    strcpy(msgq, qs.c_str());
+                    memset(&msg, 0, sizeof(msg));
+                    std::string qs = "fu:";
+                    strcpy(msg, qs.c_str());
 
                     if (1) {
                         std::lock_guard<std::mutex> guard(mutexpi);
-                        send(clientSd, (char*)&msgq, sizeof(msgq), 0);
+                        send(clientSd, (char*)&msg, strlen(msg), 0);
                     }
 
                     while (gmsg.empty()) {
@@ -839,10 +839,11 @@ void SimpleRenderer::SSS(const char* aa) {
                         }
                     }
                     std::lock_guard<std::mutex> guard(mutexpo);
-                    std::string srr = gmsg.front();
+                    std::string srrr = gmsg.front();
                     gmsg.pop_front();
-                    if (srr == "sv") {
-                        pt1[3] = srr;
+                    std::cout << "844: " << srrr << std::endl;
+                    if (srrr == "sv") {
+                        pt1[3] = srrr;
                         continue;
                     }
                     else {
