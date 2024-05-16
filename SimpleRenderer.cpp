@@ -400,7 +400,7 @@ void SimpleRenderer::snd(int tcpSd1) {
 
 }
 
-bool SimpleRenderer::cnect(const char* ip, const char* port, int &sock, int tcud, bool cnnct) {
+bool SimpleRenderer::cnect(const char* ip, const char* port, int &sock, int tcud, bool cnnct, int timeoutms) {
 
     if (tcud != SOCK_DGRAM && tcud != SOCK_STREAM) {
         std::cout << "invalid tcud" << std::endl;
@@ -432,7 +432,7 @@ bool SimpleRenderer::cnect(const char* ip, const char* port, int &sock, int tcud
 
         if (cnnct == true) {
             sock = i;
-            if (connect_with_timeout(sock, rp->ai_addr, rp->ai_addrlen, 5000) < 0) {
+            if (connect_with_timeout(sock, rp->ai_addr, rp->ai_addrlen, timeoutms) < 0) {
                 std::cout << "cant connect to server, try again later maybe" << std::endl;
                 td = "cant connect to server, try again later maybe";
                 yon = true;

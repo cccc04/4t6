@@ -28,7 +28,7 @@ public:
     const char* rts();
     bool yn();
     void ync();
-    bool cnect(const char* ip, const char* port, int &sock, int tcud, bool cnnct);
+    bool cnect(const char* ip, const char* port, int &sock, int tcud, bool cnnct, int timeoutms = 5000);
     SimpleRenderer();
     bool yyn;
     int clientSd;
