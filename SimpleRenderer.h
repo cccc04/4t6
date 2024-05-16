@@ -6,6 +6,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <vector>
+#include <list>
 
 #ifdef __APPLE__
 #include <unistd.h>
@@ -26,21 +28,26 @@ public:
     const char* rts();
     bool yn();
     void ync();
-    void cnect(const char* ip);
+    bool cnect(const char* ip, const char* port, int &sock, int tcud, bool cnnct, int timeoutms = 5000);
     SimpleRenderer();
     bool yyn;
+    int clientSd;
 private:
-    struct sockaddr_in smt();
-    void punch(sockaddr_in sendSockAddr, std::future<void> futureObj);
-    void pong();
+    struct sockaddr_in6 smt();
+    void punch(sockaddr sendSockAddr, std::future<void> futureObj);
+    bool pong(int sock);
     void snd(int tcpSd1);
     void rcv(int clientSd);
     int connect_with_timeout(int sockfd, const struct sockaddr* addr, socklen_t addrlen, unsigned int timeout_ms);
     bool yon;
     int udpSd;
     int tcpSd;
-    int clientSd;
     int tcptd[200];
     std::string dt;
     std::string td;
+    std::list<std::string> gmsg;
+    std::mutex mutexpo, mutexpi;
+    std::future<bool> pongt;
+    std::promise<void> exitSignalPong;
+    std::future<void> futureObjPong;
 };

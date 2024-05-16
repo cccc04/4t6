@@ -7,7 +7,6 @@
 //#include "MathHelper.h"
 
 // These are used by the shader compilation methods.
-#include <vector>
 #include <iostream>
 #include <stdio.h>
 #include <sys/types.h>
@@ -30,6 +29,11 @@ SimpleRenderer::SimpleRenderer() {
     yyn = false;
     yon = false;
     td = "7hbgh@jj";
+    tcpSd = socket(AF_INET6, SOCK_STREAM, 0);
+    if (tcpSd == -1) {
+        std::cout << "canttcpsocket" << std::endl;
+    }
+    futureObjPong = exitSignalPong.get_future();
 }
 
 int SimpleRenderer::connect_with_timeout(int sockfd, const struct sockaddr* addr, socklen_t addrlen, unsigned int timeout_ms) {
@@ -86,7 +90,7 @@ int SimpleRenderer::connect_with_timeout(int sockfd, const struct sockaddr* addr
     return rc;
 }
 
-void SimpleRenderer::punch(sockaddr_in sendSockAddr, std::future<void> futureObj) {
+void SimpleRenderer::punch(sockaddr sendSockAddr, std::future<void> futureObj) {
 
     char msg[10];
     int i;
@@ -109,18 +113,18 @@ void SimpleRenderer::punch(sockaddr_in sendSockAddr, std::future<void> futureObj
 
 }
 
-struct sockaddr_in SimpleRenderer::smt() {
-    int sock = socket(PF_INET, SOCK_DGRAM, 0);
-    sockaddr_in loopback;
+sockaddr_in6 SimpleRenderer::smt() {
+    int sock = socket(AF_INET6, SOCK_DGRAM, 0);
+    sockaddr_in6 loopback;
 
     if (sock == -1) {
         std::cerr << "Could not socket\n";
     }
 
     memset(&loopback, 0, sizeof(loopback));
-    loopback.sin_family = AF_INET;
-    loopback.sin_addr.s_addr = 1337;   // can be any IP address
-    loopback.sin_port = htons(9999);      // using debug port
+    loopback.sin6_family = AF_INET6;
+    std::fill_n(loopback.sin6_addr.s6_addr, 0, 16);  // can be any IP address
+    loopback.sin6_port = htons(9999);      // using debug port
 
     if (connect(sock, reinterpret_cast<sockaddr*>(&loopback), sizeof(loopback)) == -1) {
         close(sock);
@@ -135,8 +139,8 @@ struct sockaddr_in SimpleRenderer::smt() {
 
     close(sock);
 
-    char buf[INET_ADDRSTRLEN];
-    if (inet_ntop(AF_INET, &loopback.sin_addr, buf, INET_ADDRSTRLEN) == 0x0) {
+    char buf[INET6_ADDRSTRLEN];
+    if (inet_ntop(AF_INET6, &loopback.sin6_addr, buf, INET6_ADDRSTRLEN) == 0x0) {
         std::cerr << "Could not inet_ntop\n";
     }
     else {
@@ -148,48 +152,52 @@ struct sockaddr_in SimpleRenderer::smt() {
 }
 
 void SimpleRenderer::rcv(int clientSd) {
-    char msg[1500];
+
+    auto checkalive = [&]() {
+        if (pongt.wait_for(std::chrono::microseconds(1)) == std::future_status::ready) {
+            if (futureObjPong.wait_for(std::chrono::microseconds(1)) == std::future_status::ready) {
+                exitSignalPong = std::promise<void>{};
+                futureObjPong = exitSignalPong.get_future();
+            }
+            std::cout << "162: Pinger dead" << std::endl;
+            td = ".lost connection";
+            yon = true;
+            return false;
+        }
+        return true;
+    };
+    std::string sr, srr;
     while (1)
     {
         //std::cout << "Awaiting server response..." << std::endl;
-        memset(&msg, 0, sizeof(msg));//clear the buffer
-        int a = recv(clientSd, (char*)&msg, sizeof(msg), 0);
-
-        if (a == -1) {
-            std::cout << "cant recv" << std::endl;
-            std::cout << "lost connection" << std::endl;
-            td = ".lost connection";
-            yon = true;
-            break;
+        //memset(&msg, 0, sizeof(msg));//clear the buffer
+        while (gmsg.empty()) {
+            if (checkalive() == true) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            }
+            else {
+                return;
+            }
         }
-        if (a == 0) {
-
-            std::cout << "lost connection" << std::endl;
-            td = "lost connection";
-            yon = true;
-            break;
-
+        
+        if (1) {
+            std::lock_guard<std::mutex> guard(mutexpo);
+            sr = gmsg.front();
+            gmsg.pop_front();
         }
 
-        std::cout << ">someone: " << msg << std::endl;
-
-        if (!strcmp(msg, "exit"))
+        if (sr == "Z exit")
         {
             std::cout << "someone has quit the session" << std::endl;
             td = "someone has quit the session";
             yon = true;
             break;
         }
-        std::string sr, srr;
-        for (int i = 0; i < strlen(msg); i++) {
-
-            sr.push_back(msg[i]);
-
-        }
+        size_t pos = 2;
         srr = ">someone: ";
-        td = srr + sr;
+        td = srr + sr.substr(pos, sr.size()-pos);
         yon = true;
-        if ((sr.find(".txt") != std::string::npos) || (sr.find(".doc") != std::string::npos) || (sr.find(".docx") != std::string::npos) ||
+        /*if ((sr.find(".txt") != std::string::npos) || (sr.find(".doc") != std::string::npos) || (sr.find(".docx") != std::string::npos) ||
             (sr.find(".xlsx") != std::string::npos) || (sr.find(".cpp") != std::string::npos) || (sr.find(".c") != std::string::npos) || (sr.find(".pptx") != std::string::npos)
             || (sr.find(".pdf") != std::string::npos) || (sr.find(".png") != std::string::npos) || (sr.find(".jpg") != std::string::npos))
         {
@@ -215,26 +223,74 @@ void SimpleRenderer::rcv(int clientSd) {
             file.close();
             std::cout << "yay" << std::endl;
             break;
-        }
+        }*/
      }
 
 }
 
-void SimpleRenderer::pong() {
+bool SimpleRenderer::pong(int sock) {
+    char msg[1500], msgp[4], msgr[128];
 
-    char svmsg[15];
-    recv(clientSd, (char*)&svmsg, sizeof(svmsg), 0);
-    std::string sr;
-    for (int i = 0; i < strlen(svmsg); i++) {
 
-        sr.push_back(svmsg[i]);
+    std::string es = "PONG";
+    strcpy(msgp, es.c_str());
 
+    struct timeval timeout;
+    timeout.tv_sec = 5;
+    timeout.tv_usec = 0;
+    std::string os;
+    if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+        std::cout << "284: tmotf1" << std::endl;
+        return false;
     }
-    if (sr.find("PING") != std::string::npos) {
-
-        send(clientSd, (char*)&svmsg, sizeof(svmsg), 0);
-
+    while (futureObjPong.wait_for(std::chrono::milliseconds(1)) == std::future_status::timeout) {
+        std::string s;
+        int i;
+        memset(&msg, 0, sizeof(msg));
+        i = recv(sock, (char*)&msg, sizeof(msg), 0);
+        if (i <= 0) {
+            std::cout << "251: ping rcv t/o" << std::endl;
+            return false;
+        }
+        for (int i = 0; i < strlen(msg); i++) {
+            s.push_back(msg[i]);
+        }
+        if (s == "PING") {
+            if (send(sock, (char*)&msgp, sizeof(msgp), 0) < 0) {
+                std::cout << "257: f snd" << std::endl;
+                return false;
+            }
+        }
+        else if (s.find("Z ") == 0) {
+            //std::cout << "258: " << s << std::endl;
+            std::lock_guard<std::mutex> guard(mutexpo);
+            gmsg.push_back(s);
+        }
+        else if(s.find("gs:") == 0){
+            std::string ss;
+            for (int i = 3; i < strlen(msg); i++) {
+                ss.push_back(msg[i]);
+            }
+            std::cout << "267: " << ss << std::endl;
+            if (ss != "rtk") {
+                os = ss;
+                memset(&msgr, 0, sizeof(msgr));
+                snprintf(msgr, sizeof(msgr), "%zu", ss.size());
+                if (send(sock, (char*)msgr, sizeof(msgr), 0) < 0) {
+                    std::cout << "269: f snd" << std::endl;
+                    return false;
+                }
+            }
+            else {
+                std::lock_guard<std::mutex> guard(mutexpo);
+                gmsg.push_back(os);
+            }
+        }
+        else {
+            std::cout << "282: " << s << std::endl;
+        }
     }
+    return true;
 }
 
 void SimpleRenderer::sts(const char* st) {
@@ -258,21 +314,22 @@ void SimpleRenderer::ync() {
 
 void SimpleRenderer::snd(int tcpSd1) {
     char msg[1500];
-    std::string data, hd;
+    std::string data = "Z ";
     while (1)
     {
 
         memset(&msg, 0, sizeof(msg));//clear the buffer
 
-        if (data != SimpleRenderer::dt) {
-            data = SimpleRenderer::dt;
+        if (data != ("Z " + SimpleRenderer::dt)) {
+            data = "Z " + SimpleRenderer::dt;
             strcpy(msg, (data).c_str());
-            if (data == "exit")
-            {
+            if (data == "Z exit")
+            {   
+                std::lock_guard<std::mutex> guard(mutexpi);
                 send(tcpSd1, (char*)&msg, strlen(msg), 0);
                 break;
             }
-            if ((data.find(".txt") != std::string::npos) || (data.find(".doc") != std::string::npos) || (data.find(".docx") != std::string::npos) ||
+            /*if ((data.find(".txt") != std::string::npos) || (data.find(".doc") != std::string::npos) || (data.find(".docx") != std::string::npos) ||
                 (data.find(".xlsx") != std::string::npos) || (data.find(".cpp") != std::string::npos) || (data.find(".c") != std::string::npos) || (data.find(".jpg") != std::string::npos)
                 || (data.find(".pptx") != std::string::npos) || (data.find(".pdf") != std::string::npos) || (data.find(".png") != std::string::npos))
             {
@@ -327,7 +384,7 @@ void SimpleRenderer::snd(int tcpSd1) {
                 }
 
             }
-            else if (send(tcpSd1, (char*)&msg, strlen(msg), 0) == -1) {
+            else */if (std::lock_guard<std::mutex> guard(mutexpi); send(tcpSd1, (char*)&msg, strlen(msg), 0) == -1) {
 
                 std::cout << "didn't send through" << std::endl;
                 SimpleRenderer::td = "didn't send through";
@@ -343,16 +400,67 @@ void SimpleRenderer::snd(int tcpSd1) {
 
 }
 
-void SimpleRenderer::cnect(const char* ip) {
+bool SimpleRenderer::cnect(const char* ip, const char* port, int &sock, int tcud, bool cnnct, int timeoutms) {
 
-    const char* serverIp = ip; int svport = 11111;
+    if (tcud != SOCK_DGRAM && tcud != SOCK_STREAM) {
+        std::cout << "invalid tcud" << std::endl;
+        return false;
+    }
     //setup a socket and connection tools 
-    struct hostent* svhost = gethostbyname(serverIp);
-    sockaddr_in svAddr;
-    bzero((char*)&svAddr, sizeof(svAddr));
-    svAddr.sin_family = AF_INET;
-    svAddr.sin_addr.s_addr = inet_addr(inet_ntoa(*(struct in_addr*)*svhost->h_addr_list));
-    svAddr.sin_port = htons(svport);
+    struct addrinfo  hints;
+    struct addrinfo* result;
+    //sockaddr6_in svAddr;
+    bzero((char*)&hints, sizeof(hints));
+    hints.ai_family = AF_INET6;
+    hints.ai_socktype = tcud;
+    //hints.ai_protocol = 0;
+    if (cnnct == false){
+        ip = NULL;
+        hints.ai_canonname = NULL;
+        hints.ai_addr = NULL;
+        hints.ai_next = NULL;
+        hints.ai_flags = AI_PASSIVE;
+    }
+    if (getaddrinfo(ip, port, &hints, &result) != 0) {
+        std::cout << "invalid ip/port.(only ipv6 accepted)" << std::endl;
+        return false;
+    }
+    for (struct addrinfo* rp = result; rp != NULL; rp = rp->ai_next) {
+        int i = socket(rp->ai_family, rp->ai_socktype, 0);
+        if (i == -1)
+            continue;
+
+        if (cnnct == true) {
+            sock = i;
+            if (connect_with_timeout(sock, rp->ai_addr, rp->ai_addrlen, timeoutms) < 0) {
+                std::cout << "cant connect to server, try again later maybe" << std::endl;
+                td = "cant connect to server, try again later maybe";
+                yon = true;
+                return false;
+            }
+            else {
+                td = "..waiting for server";
+                yon = true;
+                return true;
+            }
+        }
+        else {
+            if (bind(sock, rp->ai_addr, rp->ai_addrlen) < 0) {
+                std::cerr << "393: cantbind, maybe try another port" << std::endl;
+                td = "cantbind, maybe try another port";
+                yon = true;
+                return false;
+            }
+            else {
+                return true;
+            }
+        }
+        close(sock);
+    }
+    return false;
+
+    /*svAddr.sin6_addr.s6_addr = inet_addr(inet_ntoa(*(struct in6_addr*)*svhost->h_addr_list));
+    svAddr.sin6_port = htons(svport);
     clientSd = socket(AF_INET, SOCK_STREAM, 0);
     if (clientSd == -1) {
         std::cout << "cantsocket" << std::endl;
@@ -362,67 +470,68 @@ void SimpleRenderer::cnect(const char* ip) {
         std::cout << "cant connect to server, try again later maybe" << std::endl;
         td = "cant connect to server, try again later maybe";
         yon = true;
-        return;
+        return false;
     }
     else {
-        yyn = true;
-    }
-
-    td = "..waiting for server";
-    yon = true;
+        td = "..waiting for server";
+        yon = true;
+        return true;
+    }*/
 }
 
 void SimpleRenderer::SSS(const char* aa) {
 
 
 
-    char svmsg[50], svmsg1[30], svmsg2[10], svmsg3[10], svmsg4[50];
-    sockaddr_in sendSockAddr, myAddr;
-
-    tcpSd = socket(AF_INET, SOCK_STREAM, 0);
-    if (tcpSd == -1) {
-        std::cout << "canttcpsocket" << std::endl;
-        return;
+    char svmsg[50], svmsg1[64], svmsg2[10], svmsg3[10], svmsg4[64];
+    //sockaddr_in sendSockAddr, myAddr;
+    const char* tgtip = aa; char abb[INET6_ADDRSTRLEN];
+    struct timeval timeout;
+    timeout.tv_sec = 5;
+    timeout.tv_usec = 0;
+    if (setsockopt(clientSd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+        std::cout << "441: prblm2" << std::endl;
     }
-
-    const int opt = 1;
-    if (setsockopt(tcpSd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-        std::cout << "prblm" << std::endl;
-    }
-
-    const char* tgtip = aa; char abb[INET_ADDRSTRLEN];
     memset(&svmsg, 0, sizeof(svmsg));//clear the buffer
     strcpy(svmsg, tgtip);
-    send(clientSd, (char*)&svmsg, strlen(svmsg), 0);
+    send(clientSd, (char*)&svmsg, sizeof(svmsg), 0);
     memset(&svmsg4, 0, sizeof(svmsg4));
-    sockaddr_in fm = smt();
-    strcpy(svmsg4, inet_ntop(AF_INET, &(fm.sin_addr.s_addr), abb, INET_ADDRSTRLEN));
+    sockaddr_in6 fm = smt();
+    /*strcpy(svmsg4, inet_ntop(AF_INET6, &(fm.sin6_addr.s6_addr), abb, INET6_ADDRSTRLEN));
     sleep(1);
     send(clientSd, (char*)svmsg4, sizeof(svmsg4), 0);
-    bzero((char*)&fm, sizeof(fm));
-    int sport; int rport;
-    memset(&svmsg1, 0, sizeof(svmsg1));
-    memset(&svmsg2, 0, sizeof(svmsg2));
-    memset(&svmsg3, 0, sizeof(svmsg3));
-    pong();
-    int f1, f2, f3;
-    f1 = recv(clientSd, (char*)&svmsg1, sizeof(svmsg1), 0);
-    if (f1 <= 0) {
-        std::cout << "didntrcv" << std::endl;
+    bzero((char*)&fm, sizeof(fm));*/
+    pongt = std::async(&SimpleRenderer::pong, this, clientSd);
+
+    std::vector<std::string> pt1;
+    pt1 = { "", "", ""};
+    /*while (1) {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }*/
+    for (int i = 0; i < 3; i++) {
+        while (gmsg.empty()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        }
+        std::lock_guard<std::mutex> guard(mutexpo);
+        pt1[i] = gmsg.front();
+        gmsg.pop_front();
+        std::cout << pt1[i] << std::endl;
     }
-    const char* pt0 = svmsg1;
-    std::cout << svmsg1 << "(bytes:" << f1 << ")" << std::endl;
-    std::cout << pt0 << std::endl;
 
-
-    f2 = recv(clientSd, (char*)&svmsg2, sizeof(svmsg2), 0);
+    const char* pt0;
+    const char* pt;
+    const char* pt2;
+    pt0 = pt1[0].c_str();
+    pt = pt1[1].c_str();
+    pt2 = pt1[2].c_str();
+    /*f2 = recv(clientSd, (char*)&svmsg2, sizeof(svmsg2), 0);
     if (f2 <= 0) {
         std::cout << "didntrcv" << std::endl;
     }
 
     const char* pt = svmsg2;
     std::cout << svmsg2 << "(bytes:" << f2 << ")" << std::endl;
-    std::cout << pt << std::endl;
+    //std::cout << pt << std::endl;
 
 
     f3 = recv(clientSd, (char*)&svmsg3, sizeof(svmsg3), 0);
@@ -433,38 +542,38 @@ void SimpleRenderer::SSS(const char* aa) {
 
     const char* pt2 = svmsg3;
     std::cout << svmsg3 << "(bytes:" << f3 << ")" << std::endl;
-    std::cout << pt2 << std::endl;
+    //std::cout << pt2 << std::endl;*/
 
     //create a message buffer 
-    char msg[1500]; sport = atoi(pt); rport = atoi(pt2);
+    char msg[1500];
     //setup a socket and connection tools 
-    struct hostent* host = gethostbyname(pt0);
 
-    socklen_t ssz = sizeof(sendSockAddr);
+    /*socklen_t ssz = sizeof(sendSockAddr);
     bzero((char*)&sendSockAddr, sizeof(sendSockAddr));
-    sendSockAddr.sin_family = AF_INET;
-    sendSockAddr.sin_addr.s_addr = inet_addr(inet_ntoa(*(struct in_addr*)*host->h_addr_list));
-    sendSockAddr.sin_port = htons(sport);
+    sendSockAddr.sin6_family = AF_INET;
+    sendSockAddr.sin6_addr.s6_addr = inet_addr(inet_ntoa(*(struct in_addr*)*host->h_addr_list));
+    sendSockAddr.sin_port = htons(sport);*/
 
-    bzero((char*)&myAddr, sizeof(myAddr));
-    myAddr.sin_family = AF_INET;
-    myAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    myAddr.sin_port = htons(rport);
-
-    udpSd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (udpSd == -1) {
-        std::cout << "cantsocket" << std::endl;
-        return;
+    struct addrinfo  hints1;
+    struct addrinfo* sendAd;
+    //sockaddr6_in svAddr;
+    bzero((char*)&hints1, sizeof(hints1));
+    hints1.ai_family = AF_INET6;
+    hints1.ai_socktype = SOCK_STREAM;
+    //hints.ai_protocol = 0;
+    hints1.ai_next = NULL;
+    if (getaddrinfo(pt0, pt, &hints1, &sendAd) != 0) {
+        std::cout << "gai 505" << std::endl;
     }
+
+
+    /*udpSd = socket(AF_INET6, SOCK_DGRAM, 0);
 
     if (setsockopt(udpSd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
         std::cout << "prblm2" << std::endl;
     }
-
-    if (bind(udpSd, (struct sockaddr*)&myAddr, sizeof(myAddr)) < 0) {
-        std::cerr << "cantbind, maybe try another port" << std::endl;
-        td = "cantbind, maybe try another port";
-        yon = true;
+    if (cnect(pt0, pt2, udpSd, SOCK_DGRAM, false) == false) {
+        std::cout << "cantsocket" << std::endl;
         return;
     }
 
@@ -472,6 +581,7 @@ void SimpleRenderer::SSS(const char* aa) {
     std::future<void> futureObj1 = exitSignal1.get_future();
 
     std::thread t1;
+    sockaddr sendSockAddr = *(sendAd->ai_addr);
     t1 = std::thread(&SimpleRenderer::punch, this, sendSockAddr, std::move(futureObj1));
     std::cout << "punching.." << std::endl;
     td = "..connecting";
@@ -506,50 +616,37 @@ void SimpleRenderer::SSS(const char* aa) {
         }
     }*/
 
-    std::thread t2;
+    const int opt = 1;
+    if (setsockopt(tcpSd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+        std::cout << "prblm" << std::endl;
+    }
 
-    if (bind(tcpSd, (struct sockaddr*)&myAddr, sizeof(myAddr)) == -1) {
+    if (cnect(pt0, pt2, tcpSd, SOCK_STREAM, false) == false) {
         std::cout << "cantbindtcp" << std::endl;
         td = "cantbindtcp";
         yon = true;
         return;
     }
 
-    bool xc = false;
+    std::thread t2;
 
-    if (connect(tcpSd, (sockaddr*)&sendSockAddr, sizeof(sendSockAddr)) == -1) {
+    bool xc = false;
+    if (cnect(pt0, pt, tcpSd, SOCK_STREAM, true) == false) {
 
         std::cout << errno << std::endl;
         close(tcpSd);
 
         std::cout << "cantconnect, retrying once.." << std::endl;
-        tcptd[0] = socket(AF_INET, SOCK_STREAM, 0);
-        if (tcptd[0] == -1) {
-            std::cout << "canttcpsocket" << std::endl;
-        }
+        tcptd[0] = socket(AF_INET6, SOCK_STREAM, 0);
         if (setsockopt(tcptd[0], SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
             std::cout << "prblm" << std::endl;
         }
-        if (bind(tcptd[0], (struct sockaddr*)&myAddr, sizeof(myAddr)) == -1) {
-            std::cout << "cantbindtcp" << std::endl;
-            return;
-        }
-        if (connect_with_timeout(tcptd[0], (sockaddr*)&sendSockAddr, sizeof(sendSockAddr), 100) == -1){
+        if (connect_with_timeout(tcptd[0], sendAd->ai_addr, sendAd->ai_addrlen, 1000) == -1){
 
             std::cout << errno << std::endl;
             std::cout << "cantconnect, retrying twice.." << std::endl;
-            tcptd[1] = socket(AF_INET, SOCK_STREAM, 0);
-            if (tcptd[1] == -1) {
-                std::cout << "canttcpsocket" << std::endl;
-            }
-            if (setsockopt(tcptd[1], SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-                std::cout << "prblm" << std::endl;
-            }
-            if (bind(tcptd[1], (struct sockaddr*)&myAddr, sizeof(myAddr)) == -1) {
-                std::cout << "cantbindtcp" << std::endl;
-                return;
-            }
-            if (connect_with_timeout(tcptd[1], (sockaddr*)&sendSockAddr, sizeof(sendSockAddr), 4000) != -1){
+            tcptd[1] = socket(AF_INET6, SOCK_STREAM, 0);
+            if (connect_with_timeout(tcptd[1], sendAd->ai_addr, sendAd->ai_addrlen, 4000) != -1){
                 xc = true;
             }
         }
@@ -563,9 +660,12 @@ void SimpleRenderer::SSS(const char* aa) {
         }
 
     }
+    else {
+        xc = true;
+    }
 
-    exitSignal1.set_value();
-    t1.join();
+    //exitSignal1.set_value();
+    //t1.join();
 
     if (xc == true) {
 
@@ -573,7 +673,7 @@ void SimpleRenderer::SSS(const char* aa) {
         std::cout << "connected" << std::endl;
         td = "connected";
         yon = true;
-        std::string data = "punchedthrough";
+        std::string data = "pcr:punchedthrough";
         memset(&msg, 0, sizeof(msg));//clear the buffer
         strcpy(msg, (data).c_str());
         send(clientSd, (char*)&msg, strlen(msg), 0);
@@ -586,7 +686,7 @@ void SimpleRenderer::SSS(const char* aa) {
         std::cout << "relaying" << std::endl;
         td = "relaying";
         yon = true;
-        std::string data = "punchedfail";
+        std::string data = "pcr:punchedfail";
         memset(&msg, 0, sizeof(msg));//clear the buffer
         strcpy(msg, (data).c_str());
         send(clientSd, (char*)&msg, strlen(msg), 0);
