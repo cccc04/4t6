@@ -46,8 +46,8 @@ private:
     std::string dt;
     std::string td;
     std::list<std::string> gmsg;
-    std::mutex mutexpo;
+    std::mutex mutexpo, mutexpi;
     std::future<bool> pongt;
-    std::promise<void> exitSignalPong, exitSignalRtn;
-    std::future<void> futureObjPong, futureObjRtn;
+    std::promise<void> exitSignalPong;
+    std::future<void> futureObjPong;
 };

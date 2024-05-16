@@ -35,35 +35,165 @@ std::vector<std::promise<void>> exitSignalPing(50), exitSignalPong(50);
 std::vector<std::future<void>> futureObjPing(50), futureObjPong(50);
 
 
-void rl(int newSd1, int newSd2) {
-    int rc, sd;
+
+bool checkalive(int i, int j) {
+    if (tmp[i].empty() && tmp[j].empty()) {
+        return false;
+    }
+    else if (tmp[i].empty()) {
+        std::cout << "broken" << std::endl;
+        exit(0);
+    }
+    bool b1, b2;
+    b1 = pongt[j].wait_for(std::chrono::microseconds(1)) == std::future_status::ready;
+    b2 = pongt[i].wait_for(std::chrono::microseconds(1)) == std::future_status::ready;
+    if (b1 || b2) {
+
+        if (b1 && b2) {
+            std::cout << "cl:" << i << "&" << j << "discnted" << std::endl;
+        }
+        else if (b1) {
+            std::cout << "cl: " << j << "discnted" << std::endl;
+        }
+        else {
+            std::cout << "cl: " << i << "discnted" << std::endl;
+        }
+        if (futureObjPing[i].wait_for(std::chrono::microseconds(1)) == std::future_status::timeout) {
+            exitSignalPing[i].set_value();
+            futureObjPing[i].wait();
+        }
+        if (futureObjPong[i].wait_for(std::chrono::microseconds(1)) == std::future_status::timeout) {
+            exitSignalPong[i].set_value();
+            futureObjPong[i].wait();
+        }
+        if (futureObjPing[j].wait_for(std::chrono::microseconds(1)) == std::future_status::timeout) {
+            exitSignalPing[j].set_value();
+            futureObjPing[j].wait();
+        }
+        if (futureObjPong[j].wait_for(std::chrono::microseconds(1)) == std::future_status::timeout) {
+            exitSignalPong[j].set_value();
+            futureObjPong[j].wait();
+        }
+
+        std::cout << "479: waiting for pinger" << std::endl;
+        pongt[j].wait();
+        pongt[i].wait();
+        pingt[j].wait();
+        pingt[i].wait();
+        exitSignalPing[i] = std::promise<void>{};
+        exitSignalPong[i] = std::promise<void>{};
+        exitSignalPing[j] = std::promise<void>{};
+        exitSignalPong[j] = std::promise<void>{};
+        futureObjPing[i] = exitSignalPing[i].get_future();
+        futureObjPong[i] = exitSignalPong[i].get_future();
+        futureObjPing[j] = exitSignalPing[j].get_future();
+        futureObjPong[j] = exitSignalPong[j].get_future();
+
+        close(newSd[i]);
+        close(newSd[j]);
+        tmp[i].clear();
+        tmp1[i].clear();
+        tmp[j].clear();
+        tmp1[j].clear();
+        return false;
+    }
+    else {
+        return true;
+    }
+}
+
+bool gsend(std::string data, int buffersize, int i, int j) {
+
+    int a;
+    int l = 5;
+    char msg[buffersize], msg1[6];
+    std::string s = "gs:rtk";
+    size_t size = data.size();
+    data = "gs:" + data;
+    memset(&msg, 0, sizeof(msg));
+    memset(&msg1, 0, sizeof(msg1));
+    strcpy(msg, data.c_str());
+    strcpy(msg1, s.c_str());
+    while (!gmsg[i].empty()) {
+        gmsg[i].pop_front();
+    }
+    while (1) {
+        if (gmsg[i].empty()) {
+            if (!checkalive(i, j)) {
+                return false;
+            }
+            if (l >= 5) {
+                l = 0;
+                std::lock_guard<std::mutex> guard(mutexpi);
+                a = send(newSd[i], (char*)msg, sizeof(msg), 0);
+                std::cout << "401: " << msg << "(bytes:" << a << ")" << std::endl;
+                if (a < 0) {
+                    std::cout << "379: error: " << errno << std::endl;
+                }
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            l++;
+        }
+        else {
+            std::lock_guard<std::mutex> guard(mutexpo);
+            std::string lcs = gmsg[i].front();
+            std::string msize;
+            char cmsize[128];
+            memset(&cmsize, 0, sizeof(cmsize));
+            snprintf(cmsize, sizeof(cmsize), "%zu", size);
+            for (int k = 0; k < strlen(cmsize); k++) {
+                msize.push_back(cmsize[k]);
+            }
+            std::cout << "416: lcs: " << lcs << " msize: " << msize << std::endl;
+            gmsg[i].pop_front();
+            if (lcs != msize) {
+            }
+            else {
+                std::lock_guard<std::mutex> guard(mutexpi);
+                send(newSd[i], (char*)msg1, sizeof(msg1), 0);
+                return true;
+            }
+        }
+    }
+
+}
+
+void rl(int i, int j) {
+    int sd;
     while (1) {
 
         char msg[1500];
-        memset(&msg, 0, sizeof(msg));//clear the buffer
-        rc = recv(newSd1, (char*)&msg, sizeof(msg), 0);
-        if (rc < 0) {
-            std::cout << "cant rcv1" << std::endl;
-            break;
+        std::string data;
+        while (gmsg[i].empty()) {
+            if (!checkalive(i, j)) {
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
         }
-        if (rc == 0) {
+        if (checkalive(i, j)) {
+            std::lock_guard<std::mutex> guard(mutexpo);
+            data = gmsg[i].front();
+            gmsg[i].pop_front();
+            memset(&msg, 0, sizeof(msg));
+            strcpy(msg, data.c_str());
+        }
+        else {
             std::cout << "dscnected r" << std::endl;
             memset(&msg, 0, sizeof(msg));//clear the buffer
-            std::string data = "exit";
+            data = "Z exit";
             strcpy(msg, data.c_str());
-            send(newSd2, (char*)&msg, sizeof(msg), 0);
+            std::lock_guard<std::mutex> guard(mutexpi);
+            send(newSd[j], (char*)&msg, sizeof(msg), 0);
             break;
         }
-        sd = send(newSd2, (char*)&msg, sizeof(msg), 0);
-        if (sd < 0) {
+
+        std::lock_guard<std::mutex> guard(mutexpi);
+        sd = send(newSd[j], (char*)&msg, sizeof(msg), 0);
+        if (sd == false) {
             std::cout << "cant snd" << std::endl;
             break;
         }
-        if (sd == 0) {
-            std::cout << "dscnected s" << std::endl;
-            break;
-        }
-        if (!strcmp(msg, "exit"))
+        if (!strcmp(msg, "Z exit"))
         {
             std::cout << "Client has quit the session" << std::endl;
             break;
@@ -83,86 +213,90 @@ void input() {
     exit(1);
 }
 
-bool cmn(int newSd) {
+bool cmn(int i, int j) {
 
-    bool yn = false;
     char msg[150];
-    memset(&msg, 0, sizeof(msg));//clear the buffer
-    int aa = recv(newSd, (char*)&msg, sizeof(msg), 0);
-    if ( aa < 0) {
-        std::cout << "cant rcv" << std::endl;
-    }
     std::string sr;
-    for (int i = 0; i < strlen(msg); i++) {
-
-        sr.push_back(msg[i]);
-
+    while (gmsg[i].empty()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
-    if ( aa > 0) {
-            if (sr.find("punchedthrough") != std::string::npos)
-            {
-                std::cout << "w" << std::endl;
-                yn = true;
+    for (int k = 0; k < 20;) {
+        if (gmsg[i].empty()) {
+            if (!checkalive(i, j)) {
+                return true;
             }
-            if (sr.find("punchedfail") != std::string::npos)
-            {
-                std::cout << "f" << std::endl;
-                yn = false;
-            }
-    }
-    if ( aa == 0) {
-            std::cout << "ept" << std::endl;
-            yn = true;
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            k++;
+            continue;
+        }
+        k = 0;
+        std::lock_guard<std::mutex> guard(mutexpo);
+        if (gmsg[i].front().find("pcr") == 0) {
+            sr = gmsg[i].front();
+            gmsg[i].pop_front();
+            break;
+        }
+        gmsg[i].pop_front();
     }
 
-    return yn;
+
+    if (sr.find("punchedthrough") != std::string::npos)
+    {
+        std::cout << "w" << std::endl;
+        return true;
+    }
+    else if (sr.find("punchedfail") != std::string::npos)
+    {
+        std::cout << "f" << std::endl;
+        return false;
+    }
+
+    std::cout << "ept" << std::endl;
+    return true;
+
 }
 
-void idp(int i, int j, std::future<bool>* pingt1, std::future<bool>* pingt2, std::future<bool>* pongt1, std::future<bool>* pongt2) {
+void idp(int i, int j) {
 
-    bool cmn1 = cmn(newSd[i]);
-    bool cmn2 = cmn(newSd[j]);
+    bool cmn1 = cmn(i,j);
+    bool cmn2 = cmn(j,i);
     std::string s;
     std::cout << cmn1 << cmn2 << std::endl;
 
-    if (!pingt1->valid() || !pongt1->valid() || !pingt2->valid() || !pongt2->valid()) {
-        s = "121: pinger not alive";
-        cmn1 = true;
-        cmn2 = true;
-    }
 
     if (cmn1 == true && cmn2 == true) {
-        s = "128: good";
+
+        std::cout << "128: good" << std::endl;
+        if (checkalive(i, j) == true) {
+            exitSignalPong[i].set_value();
+            pongt[i].wait();
+            bool al = checkalive(i, j);
+            std::cout << "135: " << al << std::endl;
+        }
         tmp[i].clear();
         tmp[j].clear();
         bzero((char*)&tsk[j], sizeof(tsk[j]));
         bzero((char*)&tsk[i], sizeof(tsk[i]));
         close(newSd[i]);
         close(newSd[j]);
-        std::cout << "135: waiting ping1" << std::endl;
-        pingt1->wait();
-        std::cout << "137: waiting ping2" << std::endl;
-        pingt2->wait();
-        std::cout << s << std::endl;
     }
     else if(cmn1 == false && cmn2 == false){
 
         std::string data = "connected";
         char msg[150];
         strcpy(msg, data.c_str());
-        if (send(newSd[i], (char*)&msg, sizeof(msg), 0) > 0) {
-            if (send(newSd[j], (char*)&msg, sizeof(msg), 0) > 0) {
-
-                std::thread tr(rl, newSd[i], newSd[j]);
-                std::thread tr2(rl, newSd[j], newSd[i]);
-                tr.join();
-                tr2.join();
-                std::cout << "ok" << std::endl;
+        if (checkalive(i,j) == true) {
+            std::thread tr(rl, i, j);
+            std::thread tr2(rl, j, i);
+            tr.join();
+            tr2.join();
+            if (checkalive(i, j) == true) {
+                exitSignalPong[i].set_value();
+                pongt[i].wait();
+                bool al = checkalive(i, j);
+                std::cout << "135: " << al << std::endl;
             }
-            else {
-                std::cout << "client dscnimt" << std::endl;
-            }
-                
+            std::cout << "ok" << std::endl;
         }
         else {
             std::cout << "client dscnimt" << std::endl;
@@ -178,6 +312,12 @@ void idp(int i, int j, std::future<bool>* pingt1, std::future<bool>* pingt2, std
     }
     else {
 
+        if (checkalive(i, j) == true) {
+            exitSignalPong[i].set_value();
+            pongt[i].wait();
+            bool al = checkalive(i, j);
+            std::cout << "135: " << al << std::endl;
+        }
         tmp[i].clear();
         tmp[j].clear();
         bzero((char*)&tsk[j], sizeof(tsk[j]));
@@ -296,10 +436,6 @@ bool pong( int j) {
         int i;
         memset(&msg, 0, sizeof(msg));
         i = recv(newSd[j], (char*)&msg, sizeof(msg), 0);
-        for (int i = 0; i < strlen(msg); i++) {
-            s.push_back(msg[i]);
-        }
-        std::cout << "298: " << s << std::endl;
         if ( i <= 0) {
             std::cout << "290: pong rcv t/o" << std::endl;
             if (futureObjPing[j].wait_for(std::chrono::milliseconds(1)) == std::future_status::timeout) {
@@ -308,124 +444,22 @@ bool pong( int j) {
             }
             return false;
         }
-        else if(s == "PONG") {
+        for (int i = 0; i < strlen(msg); i++) {
+            s.push_back(msg[i]);
+        }
+        if(s == "PONG") {
             continue;
         }
         else {
+            std::cout << "395: " << s << std::endl;
             std::lock_guard<std::mutex> guard(mutexpo);
             gmsg[j].push_back(s);
         }
+
     }
     return true;
 }
 
-bool checkalive(int i, int j){
-    if (tmp[i].empty() && tmp[j].empty()) {
-        return false;
-    }
-    else if (tmp[i].empty()) {
-        std::cout << "broken" << std::endl;
-        exit(0);
-    }
-    bool b1, b2;
-    b1 = pongt[j].wait_for(std::chrono::microseconds(1)) == std::future_status::ready;
-    b2 = pongt[i].wait_for(std::chrono::microseconds(1)) == std::future_status::ready;
-    if (b1 || b2) {
-
-        if (b1 && b2) {
-            std::cout << "cl:" << i << "&" << j << "discnted" << std::endl;
-        }
-        else if (b1) {
-            std::cout << "cl: " << j << "discnted" << std::endl;
-        }
-        else {
-            std::cout << "cl: " << i << "discnted" << std::endl;
-        }
-        if (futureObjPing[i].wait_for(std::chrono::microseconds(1)) == std::future_status::timeout) {
-            exitSignalPing[i].set_value();
-            futureObjPing[i].wait();
-        }
-        if (futureObjPong[i].wait_for(std::chrono::microseconds(1)) == std::future_status::timeout) {
-            exitSignalPong[i].set_value();
-            futureObjPong[i].wait();
-        }
-        if (futureObjPing[j].wait_for(std::chrono::microseconds(1)) == std::future_status::timeout) {
-            exitSignalPing[j].set_value();
-            futureObjPing[j].wait();
-        }
-        if (futureObjPong[j].wait_for(std::chrono::microseconds(1)) == std::future_status::timeout) {
-            exitSignalPong[j].set_value();
-            futureObjPong[j].wait();
-        }
-
-        std::cout << "479: waiting for pinger" << std::endl;
-        pongt[j].wait();
-        pongt[i].wait();
-        pingt[j].wait();
-        pingt[i].wait();
-        exitSignalPing[i] = std::promise<void>{};
-        exitSignalPong[i] = std::promise<void>{};
-        exitSignalPing[j] = std::promise<void>{};
-        exitSignalPong[j] = std::promise<void>{};
-        futureObjPing[i] = exitSignalPing[i].get_future();
-        futureObjPong[i] = exitSignalPong[i].get_future();
-        futureObjPing[j] = exitSignalPing[j].get_future();
-        futureObjPong[j] = exitSignalPong[j].get_future();
-
-        close(newSd[i]);
-        close(newSd[j]);
-        tmp[i].clear();
-        tmp1[i].clear();
-        tmp[j].clear();
-        tmp1[j].clear();
-        return false;
-    }
-    else {
-        return true;
-    }
-}
-
-bool gsend(std::string &data, int buffersize, int i, int j) {
-
-    int a;
-    char msg[buffersize], msg1[3];
-    std::string s = "rtk";
-    strcpy(msg, data.c_str());
-    strcpy(msg1, s.c_str());
-    while (1) {
-        if (gmsg[i].empty()) {
-            if (!checkalive(i, j)) {
-                return false;
-            }
-            a = send(newSd[i], (char*)msg, sizeof(msg), 0);
-            std::cout <<"401: " << msg << "(bytes:" << a << ")" << std::endl;
-            if (a < 0) {
-                std::cout << "379: error: " << errno << std::endl;
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
-        else {
-            std::lock_guard<std::mutex> guard(mutexpo);
-            std::string lcs = gmsg[i].front();
-            std::string msize;
-            char cmsize[128];
-            memset(&cmsize, 0, sizeof(cmsize));
-            snprintf(cmsize, sizeof(cmsize), "%zu", data.size());
-            for (int k = 0; k < strlen(cmsize); k++) {
-                msize.push_back(cmsize[k]);
-            }
-            std::cout << "416: lcs: " << lcs << " msize: " << msize << std::endl;
-            gmsg[i].pop_front();
-            if (lcs != msize) {
-            }
-            else {
-                send(newSd[i], (char*)msg1, sizeof(msg1), 0);
-                return true;
-            }
-        }
-    }
-
-}
 
 int acpt() {
     sockaddr_in6 newSockAddr;
@@ -647,11 +681,11 @@ int main(int argc, char* argv[])
                                 break;
                             }
                             else {
-                                exitSignalPong[i].set_value();
+                                /*exitSignalPong[i].set_value();
                                 pongt[i].wait();
                                 bool al = checkalive(i, j);
                                 std::cout << "658: " << al << std::endl;
-                                break;
+                                break;*/
                             }
                             /*usleep(20000);
                             do {
@@ -709,7 +743,7 @@ int main(int argc, char* argv[])
 
                             tmp1[i].clear();
                             tmp1[j].clear();
-                            t[j] = std::thread(&idp, i, j, &(pingt[i]), &(pingt[j]), &(pongt[i]), &(pongt[j]));
+                            t[j] = std::thread(&idp, i, j);
                             flg1 = true;
                             break;
                         }
