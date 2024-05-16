@@ -655,53 +655,6 @@ int main(int argc, char* argv[])
                                 std::cout << "658: " << al << std::endl;
                                 break;*/
                             }
-                            /*usleep(20000);
-                            do {
-                                a3 = send(newSd[j], (char*)msg3, sizeof(msg3), 0);
-                                std::cout << msg3 << "(bytes:" << a3 << ")" << std::endl;
-                                fgd = errno;
-                            } while (a <= 5);
-                            if (fgd != 0) {
-                                std::cout << "cl discnted\nerror: " << fgd << std::endl;
-                                fgd = 0;
-                            }
-                            usleep(30000);
-                            do {
-                                a1 = sendto(newSd[i], (char*)msg1, sizeof(msg1), 0, (sockaddr*)&tsk[i], sizeof(tsk[i]));
-                                std::cout << msg1 << "(bytes:" << a1 << ")" << std::endl;
-                            } while (a1 <= 2);
-                            if (fgd != 0) {
-                                std::cout << "cl discnted\nerror: " << fgd << std::endl;
-                                fgd = 0;
-                            }
-                            do {
-                                a4 = sendto(newSd[j], (char*)msg4, sizeof(msg4), 0, (sockaddr*)&tsk[j], sizeof(tsk[j]));
-                                std::cout << msg4 << "(bytes:" << a4 << ")" << std::endl;
-                            } while (a4 <= 2);
-                            if (fgd != 0) {
-                                std::cout << "cl discnted\nerror: " << fgd << std::endl;
-                                fgd = 0;
-                            }
-                            usleep(30000);
-                            do {
-                                a2 = sendto(newSd[i], (char*)msg2, sizeof(msg2), 0, (sockaddr*)&tsk[i], sizeof(tsk[i]));
-                                std::cout << msg2 << "(bytes:" << a2 << ")" << std::endl;
-                            } while (a2 <= 2);
-                            if (fgd != 0) {
-                                std::cout << "cl discnted\nerror: " << fgd << std::endl;
-                                fgd = 0;
-                            }
-                            do {
-                                a5 = sendto(newSd[j], (char*)msg5, sizeof(msg5), 0, (sockaddr*)&tsk[j], sizeof(tsk[j]));
-                                std::cout << msg5 << "(bytes:" << a5 << ")" << std::endl;
-                            } while (a5 <= 2);
-                            if (fgd != 0) {
-                                std::cout << "cl discnted\nerror: " << fgd << std::endl;
-                                fgd = 0;
-                            }*/
-                            //usleep(100000);
-
-                            /*aaa = std::thread(syc, newSd[j], msg3, msg4, msg5, newSockAddr);*/
 
                             if (t[j].joinable() == true) {
 

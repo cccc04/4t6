@@ -14,7 +14,7 @@ int main(int argc, char* argv[]) {
     t1 = std::thread([&] {while (futureObj.wait_for(std::chrono::milliseconds(1)) == std::future_status::timeout) { if (sp->yn() == true) { sp->ync(); std::cout << "R: " << sp->rts() << std::endl; } }});
     bool cflg;
     std::string ts = "2409:8900:2dd1:d9bd:81c8:1000:1000:1000";
-    if (sp->cnect(ts.c_str(), "11111", sp->clientSd, SOCK_STREAM, true, 1500) == true) {
+    if (sp->cnect(ts.c_str(), "11111", sp->clientSd, SOCK_STREAM, true, 500) == true) {
         std::cout << "bad network, exiting" << std::endl;
         exitSignal.set_value();
         t1.join();

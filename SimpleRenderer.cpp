@@ -234,6 +234,7 @@ bool SimpleRenderer::pong(int sock) {
 
     std::string es = "PONG";
     strcpy(msgp, es.c_str());
+    size_t asize = 2;
 
     struct timeval timeout;
     timeout.tv_sec = 5;
@@ -256,6 +257,7 @@ bool SimpleRenderer::pong(int sock) {
             s.push_back(msg[i]);
         }
         if (s == "PING") {
+            std::lock_guard<std::mutex> guard(mutexpi);
             if (send(sock, (char*)&msgp, sizeof(msgp), 0) < 0) {
                 std::cout << "257: f snd" << std::endl;
                 return false;
@@ -276,6 +278,7 @@ bool SimpleRenderer::pong(int sock) {
                 os = ss;
                 memset(&msgr, 0, sizeof(msgr));
                 snprintf(msgr, sizeof(msgr), "%zu", ss.size());
+                std::lock_guard<std::mutex> guard(mutexpi);
                 if (send(sock, (char*)msgr, sizeof(msgr), 0) < 0) {
                     std::cout << "269: f snd" << std::endl;
                     return false;
@@ -285,6 +288,29 @@ bool SimpleRenderer::pong(int sock) {
                 std::lock_guard<std::mutex> guard(mutexpo);
                 gmsg.push_back(os);
             }
+        }
+        else if (s.find("ff" == 0)) {
+            std::cout << "receiving file.." << std::endl;
+            td = "receiving file..";
+            yon = true;
+            memset(&msg, 0, sizeof(msg));
+            recv(clientSd, (char*)&msg, sizeof(msg), 0);
+            std::cout << "size: " << msg << "bytes" << std::endl;
+            int i = 0;
+            char* buffer = new char[atoi(msg)];
+            while (i < atoi(msg)) {
+                const int l = recv(clientSd, &buffer[i], std::min(4096, atoi(msg) - i), 0);
+                if (l < 0) { std::cout << "bs" << std::endl; } // this is an error
+                i += l;
+            }
+            std::cout << "file received " << i << " bytes" << std::endl;
+            td = "file received " + std::to_string(i) + " bytes";
+            yon = true;
+            std::ofstream file(s.substr(asize, s.size() - asize), std::ios::binary);
+            file.write(buffer, atoi(msg));
+            delete[] buffer;
+            file.close();
+            std::cout << "yay" << std::endl;
         }
         else {
             std::cout << "282: " << s << std::endl;
@@ -315,6 +341,8 @@ void SimpleRenderer::ync() {
 void SimpleRenderer::snd(int tcpSd1) {
     char msg[1500];
     std::string data = "Z ";
+    std::string adata;
+    size_t size = 2;
     while (1)
     {
 
@@ -322,6 +350,7 @@ void SimpleRenderer::snd(int tcpSd1) {
 
         if (data != ("Z " + SimpleRenderer::dt)) {
             data = "Z " + SimpleRenderer::dt;
+            adata = SimpleRenderer::dt;
             strcpy(msg, (data).c_str());
             if (data == "Z exit")
             {   
@@ -329,9 +358,10 @@ void SimpleRenderer::snd(int tcpSd1) {
                 send(tcpSd1, (char*)&msg, strlen(msg), 0);
                 break;
             }
-            /*if ((data.find(".txt") != std::string::npos) || (data.find(".doc") != std::string::npos) || (data.find(".docx") != std::string::npos) ||
-                (data.find(".xlsx") != std::string::npos) || (data.find(".cpp") != std::string::npos) || (data.find(".c") != std::string::npos) || (data.find(".jpg") != std::string::npos)
-                || (data.find(".pptx") != std::string::npos) || (data.find(".pdf") != std::string::npos) || (data.find(".png") != std::string::npos))
+            if ((data.find(".txt") != std::string::npos) || (data.find(".doc") != std::string::npos) || (data.find(".docx") != std::string::npos) ||
+                (data.find(".xlsx") != std::string::npos) || (data.find(".cpp") != std::string::npos) || (data.find(".c") != std::string::npos) || 
+                (data.find(".jpg") != std::string::npos)  || (data.find(".pptx") != std::string::npos) || (data.find(".pdf") != std::string::npos) || 
+                (data.find(".png") != std::string::npos))
             {
                 std::ifstream f1;
                 std::string drtry;
@@ -340,15 +370,17 @@ void SimpleRenderer::snd(int tcpSd1) {
                     SimpleRenderer::td = "Directory: ";
                     SimpleRenderer::yon = true;
                     while (1) {
-                        if (data == SimpleRenderer::dt) {
+                        if (adata == SimpleRenderer::dt) {
                             usleep(50000);
                         }
                         else {
                             break;
                         }
                     }
-                    f1.open(SimpleRenderer::dt + data, std::ios::binary);
+                    f1.open(SimpleRenderer::dt + adata, std::ios::binary);
                     if (f1.is_open()) {
+                        memset(&msg, 0, sizeof(msg));
+                        strcpy(msg, ("ff" + adata).c_str());
                         send(tcpSd1, (char*)&msg, strlen(msg), 0);
                         std::cout << "11" << std::endl;
                         f1.seekg(0, std::ios::end);
@@ -375,8 +407,16 @@ void SimpleRenderer::snd(int tcpSd1) {
                     else {
                         std::cout << "No such file or directory  " << std::endl;
                         std::cout << "File name: ";
-                        getline(std::cin, data);
-                        if (data == "exit") {
+                        while (1) {
+                            if (adata == SimpleRenderer::dt) {
+                                usleep(50000);
+                            }
+                            else {
+                                adata = SimpleRenderer::dt;
+                                break;
+                            }
+                        }
+                        if (adata == "exit") {
                             break;
                         }
                     }
@@ -384,7 +424,7 @@ void SimpleRenderer::snd(int tcpSd1) {
                 }
 
             }
-            else */if (std::lock_guard<std::mutex> guard(mutexpi); send(tcpSd1, (char*)&msg, strlen(msg), 0) == -1) {
+            else /**/if (std::lock_guard<std::mutex> guard(mutexpi); send(tcpSd1, (char*)&msg, strlen(msg), 0) == -1) {
 
                 std::cout << "didn't send through" << std::endl;
                 SimpleRenderer::td = "didn't send through";
@@ -676,6 +716,7 @@ void SimpleRenderer::SSS(const char* aa) {
         std::string data = "pcr:punchedthrough";
         memset(&msg, 0, sizeof(msg));//clear the buffer
         strcpy(msg, (data).c_str());
+        std::lock_guard<std::mutex> guard(mutexpi);
         send(clientSd, (char*)&msg, strlen(msg), 0);
         memset(&msg, 0, sizeof(msg));//clear the buffer
         close(clientSd);
@@ -689,6 +730,7 @@ void SimpleRenderer::SSS(const char* aa) {
         std::string data = "pcr:punchedfail";
         memset(&msg, 0, sizeof(msg));//clear the buffer
         strcpy(msg, (data).c_str());
+        std::lock_guard<std::mutex> guard(mutexpi);
         send(clientSd, (char*)&msg, strlen(msg), 0);
         memset(&msg, 0, sizeof(msg));//clear the buffer
         close(tcpSd);
