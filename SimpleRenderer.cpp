@@ -139,7 +139,7 @@ sockaddr_in6 SimpleRenderer::smt() {
 
     close(sock);
 
-    char buf[INET_ADDRSTRLEN];
+    char buf[INET6_ADDRSTRLEN];
     if (inet_ntop(AF_INET6, &loopback.sin6_addr, buf, INET6_ADDRSTRLEN) == 0x0) {
         std::cerr << "Could not inet_ntop\n";
     }
@@ -153,26 +153,32 @@ sockaddr_in6 SimpleRenderer::smt() {
 
 void SimpleRenderer::rcv(int clientSd) {
 
+    auto checkalive = [&]() {
+        if (pongt.wait_for(std::chrono::microseconds(1)) == std::future_status::ready) {
+            if (futureObjPong.wait_for(std::chrono::microseconds(1)) == std::future_status::ready) {
+                exitSignalPong = std::promise<void>{};
+                futureObjPong = exitSignalPong.get_future();
+            }
+            std::cout << "162: Pinger dead" << std::endl;
+            td = ".lost connection";
+            yon = true;
+            return false;
+        }
+        return true;
+    };
     std::string sr, srr;
     while (1)
     {
         //std::cout << "Awaiting server response..." << std::endl;
         //memset(&msg, 0, sizeof(msg));//clear the buffer
-
         while (gmsg.empty()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
-            if (pongt.wait_for(std::chrono::microseconds(1)) == std::future_status::ready) {
-                if (futureObjPong.wait_for(std::chrono::microseconds(1)) == std::future_status::ready) {
-                    exitSignalPong = std::promise<void>{};
-                    futureObjPong = exitSignalPong.get_future();
-                }
-                std::cout << "168: Pinger dead" << std::endl;
-                td = ".lost connection";
-                yon = true;
-                break;
+            if (checkalive() == true) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            }
+            else {
+                return;
             }
         }
-
         
         if (1) {
             std::lock_guard<std::mutex> guard(mutexpo);
@@ -490,8 +496,8 @@ void SimpleRenderer::SSS(const char* aa) {
     strcpy(svmsg, tgtip);
     send(clientSd, (char*)&svmsg, sizeof(svmsg), 0);
     memset(&svmsg4, 0, sizeof(svmsg4));
-    /*sockaddr_in6 fm = smt();
-    strcpy(svmsg4, inet_ntop(AF_INET6, &(fm.sin6_addr.s6_addr), abb, INET6_ADDRSTRLEN));
+    sockaddr_in6 fm = smt();
+    /*strcpy(svmsg4, inet_ntop(AF_INET6, &(fm.sin6_addr.s6_addr), abb, INET6_ADDRSTRLEN));
     sleep(1);
     send(clientSd, (char*)svmsg4, sizeof(svmsg4), 0);
     bzero((char*)&fm, sizeof(fm));*/

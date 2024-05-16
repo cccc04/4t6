@@ -575,39 +575,7 @@ int main(int argc, char* argv[])
                             std::cout << tmp[i] << std::endl;
                             tmp[i] = "anviouajsdfija7129408489uhnaidf";
                             tmp[j] = "anviouajsdfija7129408489uhnaidf";
-                            /*struct timeval timeout, timeout1;
-                            timeout.tv_sec = 2;
-                            timeout.tv_usec = 0;
-                            if (setsockopt(newSd[i], SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
-                                std::cout << "tmotf1" << std::endl;
-                            }
-                            if (setsockopt(newSd[j], SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
-                                std::cout << "tmotf2" << std::endl;
-                            }
-                            memset(&msg2, 0, sizeof(msg2));
-                            memset(&msg3, 0, sizeof(msg3));
-                                std::cout << "cl discnted" << std::endl;
-                                close(newSd[i]);
-                                close(newSd[j]);
-                                tmp[i].clear();
-                                tmp1[i].clear();
-                                tmp[j].clear();
-                                tmp1[j].clear();
-                                flg1 = true;
-                                break;
-                            }
-                            memset(&msg2, 0, sizeof(msg2));
-                            if (recv(newSd[j], (char*)&msg2, sizeof(msg2), 0) <= 0) {
-                                std::cout << "cl discnted" << std::endl;
-                                close(newSd[i]);
-                                close(newSd[j]);
-                                tmp[i].clear();
-                                tmp1[i].clear();
-                                tmp[j].clear();
-                                tmp1[j].clear();
-                                flg1 = true;
-                                break;
-                            }*/
+
                             if (!checkalive(i,j)) {
                                 flg1 = true;
                                 break;
