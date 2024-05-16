@@ -35,9 +35,9 @@ public:
 private:
     struct sockaddr_in6 smt();
     void punch(sockaddr sendSockAddr, std::future<void> futureObj);
-    bool pong(int sock);
+    bool pong(int sock, bool np = false, bool rd = true);
     void snd(int tcpSd1);
-    void rcv(int clientSd);
+    void rcv(int clientSd, bool rd = true);
     int connect_with_timeout(int sockfd, const struct sockaddr* addr, socklen_t addrlen, unsigned int timeout_ms);
     bool yon;
     int udpSd;
@@ -50,4 +50,5 @@ private:
     std::future<bool> pongt;
     std::promise<void> exitSignalPong;
     std::future<void> futureObjPong;
+    bool checkalive();
 };

@@ -28,7 +28,7 @@ sockaddr_in6 tsk[50];
 int newSd[50];
 std::thread t[50];
 int serverSd;
-std::vector<std::list<std::string>> gmsg(50);
+std::vector<std::list<std::vector<char>>> gmsg(50);
 std::mutex mutexpi, mutexpo;
 std::vector<std::future<bool>> pingt(50), pongt(50);
 std::vector<std::promise<void>> exitSignalPing(50), exitSignalPong(50);
@@ -50,7 +50,7 @@ bool checkalive(int i, int j) {
     if (b1 || b2) {
 
         if (b1 && b2) {
-            std::cout << "cl:" << i << "&" << j << "discnted" << std::endl;
+            std::cout << "cl:" << i << " & " << j << "discnted" << std::endl;
         }
         else if (b1) {
             std::cout << "cl: " << j << "discnted" << std::endl;
@@ -104,6 +104,7 @@ bool checkalive(int i, int j) {
 
 bool gsend(std::string data, int buffersize, int i, int j) {
 
+    //only taking received string variables
     int a;
     int l = 5;
     char msg[buffersize], msg1[6];
@@ -126,9 +127,9 @@ bool gsend(std::string data, int buffersize, int i, int j) {
                 l = 0;
                 std::lock_guard<std::mutex> guard(mutexpi);
                 a = send(newSd[i], (char*)msg, sizeof(msg), 0);
-                std::cout << "401: " << msg << "(bytes:" << a << ")" << std::endl;
+                std::cout << "130: " << msg << "(bytes:" << a << ")" << std::endl;
                 if (a < 0) {
-                    std::cout << "379: error: " << errno << std::endl;
+                    std::cout << "132: error: " << errno << std::endl;
                 }
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -136,7 +137,13 @@ bool gsend(std::string data, int buffersize, int i, int j) {
         }
         else {
             std::lock_guard<std::mutex> guard(mutexpo);
-            std::string lcs = gmsg[i].front();
+            std::string lcs;
+            for (auto it : gmsg[i].front()) {
+                if (it == '\0') {
+                    break;
+                }
+                lcs.push_back(it);
+            }
             std::string msize;
             char cmsize[128];
             memset(&cmsize, 0, sizeof(cmsize));
@@ -144,9 +151,10 @@ bool gsend(std::string data, int buffersize, int i, int j) {
             for (int k = 0; k < strlen(cmsize); k++) {
                 msize.push_back(cmsize[k]);
             }
-            std::cout << "416: lcs: " << lcs << " msize: " << msize << std::endl;
+            std::cout << "154: lcs: " << lcs << " msize: " << msize << std::endl;
             gmsg[i].pop_front();
             if (lcs != msize) {
+                std::cout << "ajofivseiof" << std::endl;
             }
             else {
                 std::lock_guard<std::mutex> guard(mutexpi);
@@ -172,10 +180,23 @@ void rl(int i, int j) {
         }
         if (checkalive(i, j)) {
             std::lock_guard<std::mutex> guard(mutexpo);
-            data = gmsg[i].front();
-            gmsg[i].pop_front();
+            int l = 1;
             memset(&msg, 0, sizeof(msg));
-            strcpy(msg, data.c_str());
+            for (auto it : gmsg[i].front()) {
+                if (l == 1501) {
+                    l++;
+                    break;
+                }
+                msg[l-1] = it;
+                l++;
+            }
+            if (l > 1501) {
+                std::cout << "194: >1501" << std::endl;
+                gmsg[i].front().erase(gmsg[i].front().begin(), gmsg[i].front().begin() + 1500);
+            }
+            else {
+                gmsg[i].pop_front();
+            }
         }
         else {
             std::cout << "dscnected r" << std::endl;
@@ -188,8 +209,9 @@ void rl(int i, int j) {
         }
 
         std::lock_guard<std::mutex> guard(mutexpi);
+        std::cout << "212: msg snd: " << msg << std::endl;
         sd = send(newSd[j], (char*)&msg, sizeof(msg), 0);
-        if (sd == false) {
+        if (sd < 0) {
             std::cout << "cant snd" << std::endl;
             break;
         }
@@ -230,13 +252,24 @@ bool cmn(int i, int j) {
             continue;
         }
         k = 0;
-        std::lock_guard<std::mutex> guard(mutexpo);
-        if (gmsg[i].front().find("pcr") == 0) {
-            sr = gmsg[i].front();
+        if (1) {
+            std::lock_guard<std::mutex> guard(mutexpo);
+            for (auto it : gmsg[i].front()) {
+                sr.push_back(it);
+            }
             gmsg[i].pop_front();
+        }
+        if (sr.find("pcr") == 0) {
             break;
         }
-        gmsg[i].pop_front();
+        else if (sr.find("oc") == 0) {
+            std::cout << "266: fd" << std::endl;
+            gsend("sv", 6, i, j);
+            gsend("cl", 6, j, i);
+        }
+        else {
+            sr.clear();
+        }
     }
 
 
@@ -451,9 +484,21 @@ bool pong( int j) {
             continue;
         }
         else {
-            std::cout << "395: " << s << std::endl;
+            size_t sz;
+            if (s.find("xf") == 0 || s.find("Z ") == 0 || s.find("oc") == 0) {
+                sz = strlen(msg);
+                std::cout << "480: " << s << ": " << sz << std::endl;
+            }
+            else {
+                std::cout << "484: " << s << std::endl;
+                sz = sizeof(msg);
+            }
             std::lock_guard<std::mutex> guard(mutexpo);
-            gmsg[j].push_back(s);
+            std::vector<char> tpmsg;
+            for (int i = 0; i < sz; i++) {
+                tpmsg.push_back(msg[i]);
+            }
+            gmsg[j].push_back(tpmsg);
         }
 
     }
@@ -632,13 +677,19 @@ int main(int argc, char* argv[])
                             bool bnb = false;
                             std::string data3 = inet_ntop(AF_INET6, &(tsk[i].sin6_addr.s6_addr), str2, INET6_ADDRSTRLEN);
                             std::string data = inet_ntop(AF_INET6, &(tsk[j].sin6_addr.s6_addr), str1, INET6_ADDRSTRLEN);
+                            std::string data4 = "cl";
+                            std::string data5 = "sv";
                             if (gsend(data, 64, i, j) != false) {
                                 if (gsend(data3, 64, j, i) != false) {
                                     if (gsend(data1, 10, i, j) != false) {
                                         if (gsend(data2, 10, j, i) != false) {
                                             if (gsend(data2, 10, i, j) != false) {
                                                 if (gsend(data1, 10, j, i) != false) {
-                                                    bnb = true;
+                                                    if (gsend(data5, 6, i, j) != false) {
+                                                        if (gsend(data4, 6, j, i) != false) {
+                                                            bnb = true;
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }

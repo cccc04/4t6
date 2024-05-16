@@ -151,42 +151,127 @@ sockaddr_in6 SimpleRenderer::smt() {
 
 }
 
-void SimpleRenderer::rcv(int clientSd) {
-
-    auto checkalive = [&]() {
-        if (pongt.wait_for(std::chrono::microseconds(1)) == std::future_status::ready) {
-            if (futureObjPong.wait_for(std::chrono::microseconds(1)) == std::future_status::ready) {
-                exitSignalPong = std::promise<void>{};
-                futureObjPong = exitSignalPong.get_future();
-            }
-            std::cout << "162: Pinger dead" << std::endl;
-            td = ".lost connection";
-            yon = true;
-            return false;
+bool SimpleRenderer::checkalive() {
+    if (!pongt.valid()) {
+        return false;
+    }
+    if (pongt.wait_for(std::chrono::microseconds(1)) == std::future_status::ready) {
+        if (futureObjPong.wait_for(std::chrono::microseconds(1)) == std::future_status::ready) {
+            exitSignalPong = std::promise<void>{};
+            futureObjPong = exitSignalPong.get_future();
         }
-        return true;
-    };
-    std::string sr, srr;
+        std::cout << "162: Pinger dead" << std::endl;
+        td = ".lost connection";
+        yon = true;
+        return false;
+    }
+    return true;
+}
+
+void SimpleRenderer::rcv(int sock, bool rd) {
+
+    std::string s, srr;
+    char msg[1500], msgp[5], msgr[128];
+    std::string es = "PONG";
+    strcpy(msgp, es.c_str());
+    size_t asize = 2;
+    std::string os;
     while (1)
     {
         //std::cout << "Awaiting server response..." << std::endl;
         //memset(&msg, 0, sizeof(msg));//clear the buffer
-        while (gmsg.empty()) {
-            if (checkalive() == true) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        if (rd == true) {
+            while (gmsg.empty()) {
+                if (checkalive() == true) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                }
+                else {
+                    return;
+                }
             }
-            else {
+        
+            if (1) {
+                std::lock_guard<std::mutex> guard(mutexpo);
+                s = gmsg.front();
+                gmsg.pop_front();
+            }
+        }
+        else {
+            std::string s;
+            int i;
+            memset(&msg, 0, sizeof(msg));
+            i = recv(sock, (char*)&msg, sizeof(msg), 0);
+            if (i <= 0) {
+                std::cout << "251: ping rcv t/o" << std::endl;
                 return;
             }
-        }
-        
-        if (1) {
-            std::lock_guard<std::mutex> guard(mutexpo);
-            sr = gmsg.front();
-            gmsg.pop_front();
-        }
+            for (int j = 0; j < strlen(msg); j++) {
+                s.push_back(msg[j]);
+            }
+            if (s == "PING") {
+                std::lock_guard<std::mutex> guard(mutexpi);
+                if (send(sock, (char*)&msgp, sizeof(msgp), 0) < 0) {
+                    std::cout << "257: f snd" << std::endl;
+                    return;
+                }
+            }
+            else if (s.find("Z ") == 0) {
+                //std::cout << "258: " << s << std::endl;
+                std::lock_guard<std::mutex> guard(mutexpo);
+                gmsg.push_back(s);
+            }
+            else if (s.find("gs:") == 0) {
+                std::string ss;
+                for (int i = 3; i < strlen(msg); i++) {
+                    ss.push_back(msg[i]);
+                }
+                std::cout << "267: " << ss << std::endl;
+                if (ss != "rtk") {
+                    os = ss;
+                    memset(&msgr, 0, sizeof(msgr));
+                    snprintf(msgr, sizeof(msgr), "%zu", ss.size());
+                    std::lock_guard<std::mutex> guard(mutexpi);
+                    if (send(sock, (char*)msgr, sizeof(msgr), 0) < 0) {
+                        std::cout << "269: f snd" << std::endl;
+                        return;
+                    }
+                }
+                else {
+                    std::lock_guard<std::mutex> guard(mutexpo);
+                    gmsg.push_back(os);
+                }
+            }
+            else if (s.find("xf") == 0) {
+                std::cout << "receiving file.." << std::endl;
+                td = "receiving file..";
+                yon = true;
+                memset(&msg, 0, sizeof(msg));
+                recv(sock, (char*)&msg, sizeof(msg), 0);
+                std::cout << "size: " << msg << "bytes" << std::endl;
+                int i = 0;
+                char* buffer = new char[atoi(msg)];
+                while (i < atoi(msg)) {
+                    const int l = recv(sock, &buffer[i], std::min(4096, atoi(msg) - i), 0);
+                    if (l < 0) { std::cout << "bs" << std::endl; } // this is an error
+                    i += l;
+                }
+                std::cout << "file received " << i << " bytes" << std::endl;
+                td = "file received " + std::to_string(i) + " bytes";
+                yon = true;
+                std::ofstream file(s.substr(asize, s.size() - asize), std::ios::binary);
+                file.write(buffer, atoi(msg));
+                delete[] buffer;
+                file.close();
+                std::cout << "yay" << std::endl;
+            }
+            else {
+                std::cout << "282: " << s << std::endl;
+            }
+        }//clean this shit up
 
-        if (sr == "Z exit")
+
+
+        if (s == "Z exit")
         {
             std::cout << "someone has quit the session" << std::endl;
             td = "someone has quit the session";
@@ -195,8 +280,9 @@ void SimpleRenderer::rcv(int clientSd) {
         }
         size_t pos = 2;
         srr = ">someone: ";
-        td = srr + sr.substr(pos, sr.size()-pos);
+        td = srr + s.substr(pos, s.size() - pos);
         yon = true;
+
         /*if ((sr.find(".txt") != std::string::npos) || (sr.find(".doc") != std::string::npos) || (sr.find(".docx") != std::string::npos) ||
             (sr.find(".xlsx") != std::string::npos) || (sr.find(".cpp") != std::string::npos) || (sr.find(".c") != std::string::npos) || (sr.find(".pptx") != std::string::npos)
             || (sr.find(".pdf") != std::string::npos) || (sr.find(".png") != std::string::npos) || (sr.find(".jpg") != std::string::npos))
@@ -228,92 +314,126 @@ void SimpleRenderer::rcv(int clientSd) {
 
 }
 
-bool SimpleRenderer::pong(int sock) {
-    char msg[1500], msgp[4], msgr[128];
+bool SimpleRenderer::pong(int sock, bool np, bool rd) {
+    char msg[1500], msgp[5], msgr[128];
 
 
     std::string es = "PONG";
     strcpy(msgp, es.c_str());
     size_t asize = 2;
-
-    struct timeval timeout;
-    timeout.tv_sec = 5;
-    timeout.tv_usec = 0;
     std::string os;
-    if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
-        std::cout << "284: tmotf1" << std::endl;
-        return false;
-    }
-    while (futureObjPong.wait_for(std::chrono::milliseconds(1)) == std::future_status::timeout) {
-        std::string s;
-        int i;
-        memset(&msg, 0, sizeof(msg));
-        i = recv(sock, (char*)&msg, sizeof(msg), 0);
-        if (i <= 0) {
-            std::cout << "251: ping rcv t/o" << std::endl;
+
+    if (np == false) {
+        struct timeval timeout;
+        timeout.tv_sec = 5;
+        timeout.tv_usec = 0;
+        if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+            std::cout << "284: tmotf1" << std::endl;
             return false;
         }
-        for (int i = 0; i < strlen(msg); i++) {
-            s.push_back(msg[i]);
-        }
-        if (s == "PING") {
-            std::lock_guard<std::mutex> guard(mutexpi);
-            if (send(sock, (char*)&msgp, sizeof(msgp), 0) < 0) {
-                std::cout << "257: f snd" << std::endl;
-                return false;
-            }
-        }
-        else if (s.find("Z ") == 0) {
-            //std::cout << "258: " << s << std::endl;
-            std::lock_guard<std::mutex> guard(mutexpo);
-            gmsg.push_back(s);
-        }
-        else if(s.find("gs:") == 0){
-            std::string ss;
-            for (int i = 3; i < strlen(msg); i++) {
-                ss.push_back(msg[i]);
-            }
-            std::cout << "267: " << ss << std::endl;
-            if (ss != "rtk") {
-                os = ss;
-                memset(&msgr, 0, sizeof(msgr));
-                snprintf(msgr, sizeof(msgr), "%zu", ss.size());
-                std::lock_guard<std::mutex> guard(mutexpi);
-                if (send(sock, (char*)msgr, sizeof(msgr), 0) < 0) {
-                    std::cout << "269: f snd" << std::endl;
+    }
+    while (futureObjPong.wait_for(std::chrono::milliseconds(1)) == std::future_status::timeout) {
+        std::string s, srr;
+        int i;
+        if (np == true && rd == true) {
+            while (gmsg.empty()) {
+                if (checkalive() == true) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                }
+                else {
                     return false;
                 }
             }
-            else {
+
+            if (1) {
                 std::lock_guard<std::mutex> guard(mutexpo);
-                gmsg.push_back(os);
+                s = gmsg.front();
+                gmsg.pop_front();
             }
         }
-        else if (s.find("ff" == 0)) {
-            std::cout << "receiving file.." << std::endl;
-            td = "receiving file..";
-            yon = true;
+        else if (rd == false || np == false) {
+
             memset(&msg, 0, sizeof(msg));
-            recv(clientSd, (char*)&msg, sizeof(msg), 0);
-            std::cout << "size: " << msg << "bytes" << std::endl;
-            int i = 0;
-            char* buffer = new char[atoi(msg)];
-            while (i < atoi(msg)) {
-                const int l = recv(clientSd, &buffer[i], std::min(4096, atoi(msg) - i), 0);
-                if (l < 0) { std::cout << "bs" << std::endl; } // this is an error
-                i += l;
+            i = recv(sock, (char*)&msg, sizeof(msg), 0);
+            if (i <= 0) {
+                std::cout << "251: ping rcv t/o" << std::endl;
+                return false;
             }
-            std::cout << "file received " << i << " bytes" << std::endl;
-            td = "file received " + std::to_string(i) + " bytes";
-            yon = true;
-            std::ofstream file(s.substr(asize, s.size() - asize), std::ios::binary);
-            file.write(buffer, atoi(msg));
-            delete[] buffer;
-            file.close();
-            std::cout << "yay" << std::endl;
+            for (int j = 0; j < strlen(msg); j++) {
+                s.push_back(msg[j]);
+            }
+            if (s == "PING") {
+                std::lock_guard<std::mutex> guard(mutexpi);
+                if (send(sock, (char*)&msgp, sizeof(msgp), 0) < 0) {
+                    std::cout << "257: f snd" << std::endl;
+                    return false;
+                }
+            }
+            else if (s.find("Z ") == 0) {
+                //std::cout << "258: " << s << std::endl;
+                std::lock_guard<std::mutex> guard(mutexpo);
+                gmsg.push_back(s);
+            }
+            else if (s.find("gs:") == 0) {
+                std::string ss;
+                for (int i = 3; i < strlen(msg); i++) {
+                    ss.push_back(msg[i]);
+                }
+                std::cout << "267: " << ss << std::endl;
+                if (ss != "rtk") {
+                    os = ss;
+                    memset(&msgr, 0, sizeof(msgr));
+                    snprintf(msgr, sizeof(msgr), "%zu", ss.size());
+                    std::lock_guard<std::mutex> guard(mutexpi);
+                    if (send(sock, (char*)msgr, sizeof(msgr), 0) < 0) {
+                        std::cout << "269: f snd" << std::endl;
+                        return false;
+                    }
+                }
+                else {
+                    std::lock_guard<std::mutex> guard(mutexpo);
+                    gmsg.push_back(os);
+                }
+            }
+            else if (s.find("xf") == 0) {
+                std::cout << "receiving file.." << std::endl;
+                td = "receiving file..";
+                yon = true;
+                memset(&msg, 0, sizeof(msg));
+                recv(sock, (char*)&msg, sizeof(msg), 0);
+                std::cout << "size: " << msg << "bytes" << std::endl;
+                int i = 0;
+                char* buffer = new char[atoi(msg)];
+                while (i < atoi(msg)) {
+                    const int l = recv(sock, &buffer[i], std::min(4096, atoi(msg) - i), 0);
+                    if (l < 0) { std::cout << "bs" << std::endl; } // this is an error
+                    i += l;
+                }
+                std::cout << "file received " << i << " bytes" << std::endl;
+                td = "file received " + std::to_string(i) + " bytes";
+                yon = true;
+                std::ofstream file(s.substr(asize, s.size() - asize), std::ios::binary);
+                file.write(buffer, atoi(msg));
+                delete[] buffer;
+                file.close();
+                std::cout << "yay" << std::endl;
+            }
+            else {
+                std::cout << "282: " << s << std::endl;
+            }
         }
-        else {
-            std::cout << "282: " << s << std::endl;
+        if (np == true) {
+            if (s == "Z exit")
+            {
+                std::cout << "someone has quit the session" << std::endl;
+                td = "someone has quit the session";
+                yon = true;
+                break;
+            }
+            size_t pos = 2;
+            srr = ">someone: ";
+            td = srr + s.substr(pos, s.size() - pos);
+            yon = true;
         }
     }
     return true;
@@ -339,6 +459,7 @@ void SimpleRenderer::ync() {
 }
 
 void SimpleRenderer::snd(int tcpSd1) {
+    std::cout << "462: called snd" << std::endl;
     char msg[1500];
     std::string data = "Z ";
     std::string adata;
@@ -380,7 +501,7 @@ void SimpleRenderer::snd(int tcpSd1) {
                     f1.open(SimpleRenderer::dt + adata, std::ios::binary);
                     if (f1.is_open()) {
                         memset(&msg, 0, sizeof(msg));
-                        strcpy(msg, ("ff" + adata).c_str());
+                        strcpy(msg, ("xf" + adata).c_str());
                         send(tcpSd1, (char*)&msg, strlen(msg), 0);
                         std::cout << "11" << std::endl;
                         f1.seekg(0, std::ios::end);
@@ -406,7 +527,8 @@ void SimpleRenderer::snd(int tcpSd1) {
                     }
                     else {
                         std::cout << "No such file or directory  " << std::endl;
-                        std::cout << "File name: ";
+                        std::cout << "File name: " << std::endl;
+                        adata = SimpleRenderer::dt;
                         while (1) {
                             if (adata == SimpleRenderer::dt) {
                                 usleep(50000);
@@ -541,58 +663,200 @@ void SimpleRenderer::SSS(const char* aa) {
     sleep(1);
     send(clientSd, (char*)svmsg4, sizeof(svmsg4), 0);
     bzero((char*)&fm, sizeof(fm));*/
-    pongt = std::async(&SimpleRenderer::pong, this, clientSd);
+    pongt = std::async(&SimpleRenderer::pong, this, clientSd, false, true);
 
     std::vector<std::string> pt1;
-    pt1 = { "", "", ""};
     /*while (1) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }*/
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 4; i++) {
         while (gmsg.empty()) {
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
         }
         std::lock_guard<std::mutex> guard(mutexpo);
-        pt1[i] = gmsg.front();
+        pt1.push_back(gmsg.front());
         gmsg.pop_front();
         std::cout << pt1[i] << std::endl;
     }
-
-    const char* pt0;
-    const char* pt;
-    const char* pt2;
-    pt0 = pt1[0].c_str();
-    pt = pt1[1].c_str();
-    pt2 = pt1[2].c_str();
-    /*f2 = recv(clientSd, (char*)&svmsg2, sizeof(svmsg2), 0);
-    if (f2 <= 0) {
-        std::cout << "didntrcv" << std::endl;
-    }
-
-    const char* pt = svmsg2;
-    std::cout << svmsg2 << "(bytes:" << f2 << ")" << std::endl;
-    //std::cout << pt << std::endl;
-
-
-    f3 = recv(clientSd, (char*)&svmsg3, sizeof(svmsg3), 0);
-    if (f3 <= 0) {
-        std::cout << "didntrcv" << std::endl;
-        return;
-    }
-
-    const char* pt2 = svmsg3;
-    std::cout << svmsg3 << "(bytes:" << f3 << ")" << std::endl;
-    //std::cout << pt2 << std::endl;*/
 
     //create a message buffer 
     char msg[1500];
     //setup a socket and connection tools 
 
+    bool xc = false;
+    int* ptcpSd;
+    for(int q = 0; q < 1; q++){
+        if (pt1[3] == "sv") {
+            sockaddr_in6 servAddr;
+            bzero((char*)&servAddr, sizeof(servAddr));
+            int innt = stoi(pt1[2]) - 100;
+            servAddr.sin6_family = AF_INET6;
+            servAddr.sin6_addr = in6addr_any;
+            servAddr.sin6_port = htons(innt);
+            std::cout << "578: " << innt << std::endl;
+
+            int serverSd = socket(AF_INET6, SOCK_STREAM, 0);
+            if (serverSd < 0)
+            {
+                std::cerr << "Error establishing the server socket" << std::endl;
+            }
+            //bind the socket to its local address
+            int bindStatus = bind(serverSd, (struct sockaddr*)&servAddr, sizeof(servAddr));
+            if (bindStatus < 0)
+            {
+                std::cerr << "Error binding socket to local address" << std::endl;
+            }
+            listen(serverSd, 1);
+
+            sockaddr_in6 newSockAddr;
+            bzero((char*)&newSockAddr, sizeof(newSockAddr));
+            socklen_t newSockAddrSize = sizeof(newSockAddr);
+            int newSd;
+            auto acpt = [&] {
+                while (1) {
+                    newSd = accept(serverSd, (sockaddr*)&newSockAddr, &newSockAddrSize);
+                    if (newSd < 0)
+                    {
+                        std::cerr << "Error accepting request from client!" << std::endl;
+                        return false;
+                    }
+                    char ccstr[INET6_ADDRSTRLEN];
+                    std::string string = inet_ntop(AF_INET6, &(newSockAddr.sin6_addr.s6_addr), ccstr, INET6_ADDRSTRLEN);
+                    std::cout << string << ":" << ntohs(newSockAddr.sin6_port) << std::endl;
+                    if (string == pt1[0]) {
+                        std::cout << "Connected with client!" << std::endl;
+                        ptcpSd = &newSd;
+                        return true;
+                    }
+
+                    close(newSd);
+                }
+                return false;
+            };
+            std::future<bool> thread = std::async(acpt);
+            int x = 0;
+            while (gmsg.empty() && (thread.wait_for(std::chrono::microseconds(1)) == std::future_status::timeout)) {
+                if (checkalive()) {
+                    if (x == 5) {
+                        x = 0;
+                    }
+                    x++;
+                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                }
+                else {
+                    std::cout << "626: not alive" << std::endl;
+                    xc = false;
+                    close(serverSd);
+                    thread.wait();
+                    break;
+                }
+            }
+            if (thread.wait_for(std::chrono::microseconds(1)) == std::future_status::ready && thread.get() == true) {
+                    std::cout << "635: joinable" << std::endl;
+                    xc = true;
+            }
+            else {
+                close(serverSd);
+                thread.wait();
+                if (q == 0 ) {
+                    std::lock_guard<std::mutex> guard(mutexpo);
+                    std::string srr = gmsg.front();
+                    gmsg.pop_front();
+                    if (srr == "cl") {
+                        pt1[3] = srr;
+                        continue;
+                    }
+                    else {
+                        std::cout << "649: no idea what happened here";
+                    }
+                }
+                xc = false;
+                break;
+            }
+
+        }
+        else if (pt1[3] == "cl") {
+            const int opt = 1;
+            if (setsockopt(tcpSd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+                std::cout << "prblm" << std::endl;
+            }
+
+            if (cnect(pt1[0].c_str(), std::to_string((stoi(pt1[2]) - 100)).c_str(), tcpSd, SOCK_STREAM, false) == false) {
+                std::cout << "cantbindtcp" << std::endl;
+                td = "cantbindtcp";
+                yon = true;
+                return;
+            }
+
+            if (cnect(pt1[0].c_str(), std::to_string((stoi(pt1[1]) - 100)).c_str(), tcpSd, SOCK_STREAM) == false) {
+
+                std::cout << errno << std::endl;
+                close(tcpSd);
+
+                std::cout << "cantconnect, retrying once.." << std::endl;
+                tcptd[0] = socket(AF_INET6, SOCK_STREAM, 0);
+                if (setsockopt(tcptd[0], SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+                    std::cout << "prblm" << std::endl;
+                }
+                if (cnect(pt1[0].c_str(), std::to_string((stoi(pt1[1]) - 100)).c_str(), tcptd[0], SOCK_STREAM, true, 1000) == false) {
+
+                    std::cout << errno << std::endl;
+                    xc = false;
+                }
+                else {
+                    xc = true;
+                    ptcpSd = &tcptd[0];
+                }
+                if (xc == false) {
+
+                    std::cout << errno << std::endl;
+                    std::cout << "cantconnect, relay" << std::endl;
+                }
+
+            }
+            else {
+                xc = true;
+            }
+            if (xc == false) {
+                if (q == 0) {
+                    char msgq[5];
+                    memset(&msgq, 0, sizeof(msgq));
+                    std::string qs = "oc";
+                    strcpy(msgq, qs.c_str());
+
+                    if (1) {
+                        std::lock_guard<std::mutex> guard(mutexpi);
+                        send(clientSd, (char*)&msgq, sizeof(msgq), 0);
+                    }
+
+                    while (gmsg.empty()) {
+                        if (checkalive()) {
+                            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                        }
+                        else {
+                            xc = false;
+                            break;
+                        }
+                    }
+                    std::lock_guard<std::mutex> guard(mutexpo);
+                    std::string srr = gmsg.front();
+                    gmsg.pop_front();
+                    if (srr == "sv") {
+                        pt1[3] = srr;
+                        continue;
+                    }
+                    else {
+                        std::cout << "649: no idea what happened here";
+                    }
+                }
+            }
+        }
+    }
     /*socklen_t ssz = sizeof(sendSockAddr);
     bzero((char*)&sendSockAddr, sizeof(sendSockAddr));
     sendSockAddr.sin6_family = AF_INET;
     sendSockAddr.sin6_addr.s6_addr = inet_addr(inet_ntoa(*(struct in_addr*)*host->h_addr_list));
-    sendSockAddr.sin_port = htons(sport);*/
+    sendSockAddr.sin_port = htons(sport);
 
     struct addrinfo  hints1;
     struct addrinfo* sendAd;
@@ -602,9 +866,9 @@ void SimpleRenderer::SSS(const char* aa) {
     hints1.ai_socktype = SOCK_STREAM;
     //hints.ai_protocol = 0;
     hints1.ai_next = NULL;
-    if (getaddrinfo(pt0, pt, &hints1, &sendAd) != 0) {
+    if (getaddrinfo(pt1[0].c_str(), pt1[1].c_str(), &hints1, &sendAd) != 0) {
         std::cout << "gai 505" << std::endl;
-    }
+    }*/
 
 
     /*udpSd = socket(AF_INET6, SOCK_DGRAM, 0);
@@ -656,57 +920,11 @@ void SimpleRenderer::SSS(const char* aa) {
         }
     }*/
 
-    const int opt = 1;
-    if (setsockopt(tcpSd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-        std::cout << "prblm" << std::endl;
-    }
 
-    if (cnect(pt0, pt2, tcpSd, SOCK_STREAM, false) == false) {
-        std::cout << "cantbindtcp" << std::endl;
-        td = "cantbindtcp";
-        yon = true;
-        return;
-    }
-
-    std::thread t2;
-
-    bool xc = false;
-    if (cnect(pt0, pt, tcpSd, SOCK_STREAM, true) == false) {
-
-        std::cout << errno << std::endl;
-        close(tcpSd);
-
-        std::cout << "cantconnect, retrying once.." << std::endl;
-        tcptd[0] = socket(AF_INET6, SOCK_STREAM, 0);
-        if (setsockopt(tcptd[0], SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-            std::cout << "prblm" << std::endl;
-        }
-        if (connect_with_timeout(tcptd[0], sendAd->ai_addr, sendAd->ai_addrlen, 1000) == -1){
-
-            std::cout << errno << std::endl;
-            std::cout << "cantconnect, retrying twice.." << std::endl;
-            tcptd[1] = socket(AF_INET6, SOCK_STREAM, 0);
-            if (connect_with_timeout(tcptd[1], sendAd->ai_addr, sendAd->ai_addrlen, 4000) != -1){
-                xc = true;
-            }
-        }
-        else {
-            xc = true;
-        }
-        if(xc == false){
-
-            std::cout << errno << std::endl;
-            std::cout << "cantconnect, relay" << std::endl;
-        }
-
-    }
-    else {
-        xc = true;
-    }
 
     //exitSignal1.set_value();
     //t1.join();
-
+    std::thread t2;
     if (xc == true) {
 
         std::cout << "hole's ready" << std::endl;
@@ -719,8 +937,15 @@ void SimpleRenderer::SSS(const char* aa) {
         std::lock_guard<std::mutex> guard(mutexpi);
         send(clientSd, (char*)&msg, strlen(msg), 0);
         memset(&msg, 0, sizeof(msg));//clear the buffer
+        /*if (futureObjPong.wait_for(std::chrono::microseconds(1)) == std::future_status::timeout) {
+            exitSignalPong.set_value();
+            pongt.wait();
+            exitSignalPong = std::promise<void>{};
+            futureObjPong = exitSignalPong.get_future();
+        }*/
         close(clientSd);
-
+        //pongt.wait();
+        t2 = std::thread(&SimpleRenderer::rcv, this, *ptcpSd, false);
     }
     else {
 
@@ -735,11 +960,11 @@ void SimpleRenderer::SSS(const char* aa) {
         memset(&msg, 0, sizeof(msg));//clear the buffer
         close(tcpSd);
         tcpSd = clientSd;
-
+        t2 = std::thread(&SimpleRenderer::rcv, this, *ptcpSd, true);
     }
 
-    t2 = std::thread(&SimpleRenderer::rcv, this, tcpSd);
-    snd(tcpSd);
+     
+    snd(*ptcpSd);
     t2.join();
 
     close(tcpSd);
