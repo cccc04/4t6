@@ -156,7 +156,7 @@ bool SimpleRenderer::checkalive() {
         return false;
     }
     if (pongt.wait_for(std::chrono::microseconds(1)) == std::future_status::ready) {
-        if (futureObjPong.wait_for(std::chrono::microseconds(1)) == std::future_status::ready) {
+        if (futureObjPong.valid() && (futureObjPong.wait_for(std::chrono::microseconds(1)) == std::future_status::ready)) {
             exitSignalPong = std::promise<void>{};
             futureObjPong = exitSignalPong.get_future();
         }
@@ -168,7 +168,7 @@ bool SimpleRenderer::checkalive() {
     return true;
 }
 
-void SimpleRenderer::rcv(int sock, bool rd) {
+/*void SimpleRenderer::rcv(int sock, bool rd) {
 
     std::string s, srr;
     char msg[1500], msgp[5], msgr[128];
@@ -176,8 +176,11 @@ void SimpleRenderer::rcv(int sock, bool rd) {
     strcpy(msgp, es.c_str());
     size_t asize = 2;
     std::string os;
+
+    srr = ">someone: ";
     while (1)
     {
+        s.clear();
         //std::cout << "Awaiting server response..." << std::endl;
         //memset(&msg, 0, sizeof(msg));//clear the buffer
         if (rd == true) {
@@ -195,14 +198,17 @@ void SimpleRenderer::rcv(int sock, bool rd) {
                 s = gmsg.front();
                 gmsg.pop_front();
             }
+
+
+            td = srr + s.substr(asize, s.size() - asize);
+            yon = true;
         }
         else {
-            std::string s;
             int i;
             memset(&msg, 0, sizeof(msg));
             i = recv(sock, (char*)&msg, sizeof(msg), 0);
             if (i <= 0) {
-                std::cout << "251: ping rcv t/o" << std::endl;
+                std::cout << "205: ping rcv t/o: " << errno << std::endl;
                 return;
             }
             for (int j = 0; j < strlen(msg); j++) {
@@ -211,28 +217,28 @@ void SimpleRenderer::rcv(int sock, bool rd) {
             if (s == "PING") {
                 std::lock_guard<std::mutex> guard(mutexpi);
                 if (send(sock, (char*)&msgp, sizeof(msgp), 0) < 0) {
-                    std::cout << "257: f snd" << std::endl;
+                    std::cout << "214: f snd" << std::endl;
                     return;
                 }
             }
             else if (s.find("Z ") == 0) {
                 //std::cout << "258: " << s << std::endl;
-                std::lock_guard<std::mutex> guard(mutexpo);
-                gmsg.push_back(s);
+                td = srr + s.substr(asize, s.size() - asize);
+                yon = true;
             }
             else if (s.find("gs:") == 0) {
                 std::string ss;
                 for (int i = 3; i < strlen(msg); i++) {
                     ss.push_back(msg[i]);
                 }
-                std::cout << "267: " << ss << std::endl;
+                std::cout << "228: " << ss << std::endl;
                 if (ss != "rtk") {
                     os = ss;
                     memset(&msgr, 0, sizeof(msgr));
                     snprintf(msgr, sizeof(msgr), "%zu", ss.size());
                     std::lock_guard<std::mutex> guard(mutexpi);
                     if (send(sock, (char*)msgr, sizeof(msgr), 0) < 0) {
-                        std::cout << "269: f snd" << std::endl;
+                        std::cout << "235: f snd" << std::endl;
                         return;
                     }
                 }
@@ -265,7 +271,7 @@ void SimpleRenderer::rcv(int sock, bool rd) {
                 std::cout << "yay" << std::endl;
             }
             else {
-                std::cout << "282: " << s << std::endl;
+                std::cout << "268: " << s << std::endl;
             }
         }//clean this shit up
 
@@ -276,12 +282,8 @@ void SimpleRenderer::rcv(int sock, bool rd) {
             std::cout << "someone has quit the session" << std::endl;
             td = "someone has quit the session";
             yon = true;
-            break;
+            return;
         }
-        size_t pos = 2;
-        srr = ">someone: ";
-        td = srr + s.substr(pos, s.size() - pos);
-        yon = true;
 
         /*if ((sr.find(".txt") != std::string::npos) || (sr.find(".doc") != std::string::npos) || (sr.find(".docx") != std::string::npos) ||
             (sr.find(".xlsx") != std::string::npos) || (sr.find(".cpp") != std::string::npos) || (sr.find(".c") != std::string::npos) || (sr.find(".pptx") != std::string::npos)
@@ -309,10 +311,10 @@ void SimpleRenderer::rcv(int sock, bool rd) {
             file.close();
             std::cout << "yay" << std::endl;
             break;
-        }*/
+        }
      }
 
-}
+}*/
 
 bool SimpleRenderer::pong(int sock, bool np, bool rd) {
     char msg[1500], msgp[5], msgr[128];
@@ -328,9 +330,14 @@ bool SimpleRenderer::pong(int sock, bool np, bool rd) {
         timeout.tv_sec = 5;
         timeout.tv_usec = 0;
         if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
-            std::cout << "284: tmotf1" << std::endl;
+            std::cout << "331: tmotf1" << std::endl;
             return false;
         }
+        if (setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) < 0) {
+            std::cout << "335: tmotf2" << std::endl;
+            return false;
+        }
+        std::cout << "338: " << std::endl;
     }
     while (futureObjPong.wait_for(std::chrono::milliseconds(1)) == std::future_status::timeout) {
         std::string s, srr;
@@ -350,6 +357,9 @@ bool SimpleRenderer::pong(int sock, bool np, bool rd) {
                 s = gmsg.front();
                 gmsg.pop_front();
             }
+
+            td = srr + s.substr(asize, s.size() - asize);
+            yon = true;
         }
         else if (rd == false || np == false) {
 
@@ -363,16 +373,33 @@ bool SimpleRenderer::pong(int sock, bool np, bool rd) {
                 s.push_back(msg[j]);
             }
             if (s == "PING") {
+                std::cout << "367: ping rcved" << std::endl;
                 std::lock_guard<std::mutex> guard(mutexpi);
                 if (send(sock, (char*)&msgp, sizeof(msgp), 0) < 0) {
                     std::cout << "257: f snd" << std::endl;
                     return false;
                 }
+                std::cout << "372: ping sent" << std::endl;
             }
             else if (s.find("Z ") == 0) {
                 //std::cout << "258: " << s << std::endl;
-                std::lock_guard<std::mutex> guard(mutexpo);
-                gmsg.push_back(s);
+                if (np == true) {
+                    if (s.find("Z exit") == 0)
+                    {
+                        std::cout << "someone has quit the session" << std::endl;
+                        td = "someone has quit the session";
+                        yon = true;
+                        return true;
+                    }
+                    size_t pos = 2;
+                    srr = ">someone: ";
+                    td = srr + s.substr(pos, s.size() - pos);
+                    yon = true;
+                }
+                else {
+                    std::lock_guard<std::mutex> guard(mutexpo);
+                    gmsg.push_back(s);
+                }
             }
             else if (s.find("gs:") == 0) {
                 std::string ss;
@@ -420,20 +447,7 @@ bool SimpleRenderer::pong(int sock, bool np, bool rd) {
             }
             else {
                 std::cout << "282: " << s << std::endl;
-            }
-        }
-        if (np == true) {
-            if (s == "Z exit")
-            {
-                std::cout << "someone has quit the session" << std::endl;
-                td = "someone has quit the session";
-                yon = true;
-                break;
-            }
-            size_t pos = 2;
-            srr = ">someone: ";
-            td = srr + s.substr(pos, s.size() - pos);
-            yon = true;
+            }        
         }
     }
     return true;
@@ -546,7 +560,7 @@ void SimpleRenderer::snd(int tcpSd1) {
                 }
 
             }
-            else /**/if (std::lock_guard<std::mutex> guard(mutexpi); send(tcpSd1, (char*)&msg, strlen(msg), 0) == -1) {
+            else if ([&] {std::lock_guard<std::mutex> guard(mutexpi); bool b; b = (send(tcpSd1, (char*)&msg, strlen(msg), 0) == -1); return b;}()) {
 
                 std::cout << "didn't send through" << std::endl;
                 SimpleRenderer::td = "didn't send through";
@@ -685,7 +699,7 @@ void SimpleRenderer::SSS(const char* aa) {
 
     bool xc = false;
     int* ptcpSd;
-    for(int q = 0; q < 2; q++){
+    for (int q = 0; q < 2; q++) {
         if (pt1[3] == "sv") {
             sockaddr_in6 servAddr;
             bzero((char*)&servAddr, sizeof(servAddr));
@@ -725,11 +739,15 @@ void SimpleRenderer::SSS(const char* aa) {
                     std::cout << string << ":" << ntohs(newSockAddr.sin6_port) << std::endl;
                     if (string == pt1[0]) {
                         std::cout << "Connected with client!" << std::endl;
-                        ptcpSd = &newSd;
+                        int yes = 1;
+                        if (setsockopt(newSd, SOL_SOCKET, SO_KEEPALIVE, &yes, sizeof(int)) == -1) {
+                            std::cout << "KAL fail" << std::endl;
+                        }
+                        tcpSd = newSd;
                         return true;
                     }
 
-                    close(newSd);
+                    //close(newSd);
                 }
                 return false;
             };
@@ -747,17 +765,23 @@ void SimpleRenderer::SSS(const char* aa) {
                     std::cout << "626: not alive" << std::endl;
                     xc = false;
                     close(serverSd);
-                    thread.wait();
+                    if (thread.valid()) {
+                        thread.wait();
+                    }
                     break;
                 }
             }
             if (thread.wait_for(std::chrono::microseconds(1)) == std::future_status::ready && thread.get() == true) {
                     std::cout << "635: joinable" << std::endl;
+                    tcpSd = newSd;
                     xc = true;
+                    break;
             }
             else {
                 close(serverSd);
-                thread.wait();
+                if (thread.valid()) {
+                    thread.wait();
+                }
                 if (q == 0 ) {
                     std::lock_guard<std::mutex> guard(mutexpo);
                     std::string srrr = gmsg.front();
@@ -806,7 +830,7 @@ void SimpleRenderer::SSS(const char* aa) {
                 }
                 else {
                     xc = true;
-                    ptcpSd = &tcptd[0];
+                    tcpSd = tcptd[0];
                 }
                 if (xc == false) {
 
@@ -850,6 +874,9 @@ void SimpleRenderer::SSS(const char* aa) {
                         std::cout << "649: no idea what happened here";
                     }
                 }
+            }
+            else {
+                break;
             }
         }
     }
@@ -935,18 +962,25 @@ void SimpleRenderer::SSS(const char* aa) {
         std::string data = "pcr:punchedthrough";
         memset(&msg, 0, sizeof(msg));//clear the buffer
         strcpy(msg, (data).c_str());
-        std::lock_guard<std::mutex> guard(mutexpi);
-        send(clientSd, (char*)&msg, strlen(msg), 0);
-        memset(&msg, 0, sizeof(msg));//clear the buffer
-        /*if (futureObjPong.wait_for(std::chrono::microseconds(1)) == std::future_status::timeout) {
+        if (1) {
+            std::lock_guard<std::mutex> guard(mutexpi);
+            send(clientSd, (char*)&msg, strlen(msg), 0);
+            memset(&msg, 0, sizeof(msg));//clear the buffer
+        }
+        if (futureObjPong.valid() && (futureObjPong.wait_for(std::chrono::microseconds(1)) == std::future_status::timeout)) {
             exitSignalPong.set_value();
-            pongt.wait();
+            while (checkalive()) {
+                std::cout << "still alive" << std::endl;
+                std::this_thread::sleep_for(std::chrono::seconds(2));
+            }
             exitSignalPong = std::promise<void>{};
             futureObjPong = exitSignalPong.get_future();
-        }*/
+        }
         close(clientSd);
-        //pongt.wait();
-        t2 = std::thread(&SimpleRenderer::rcv, this, *ptcpSd, false);
+        if (pongt.valid()) {
+            pongt.wait();
+        }
+        t2 = std::thread(&SimpleRenderer::pong, this, tcpSd, true, false);
     }
     else {
 
@@ -956,16 +990,18 @@ void SimpleRenderer::SSS(const char* aa) {
         std::string data = "pcr:punchedfail";
         memset(&msg, 0, sizeof(msg));//clear the buffer
         strcpy(msg, (data).c_str());
-        std::lock_guard<std::mutex> guard(mutexpi);
-        send(clientSd, (char*)&msg, strlen(msg), 0);
-        memset(&msg, 0, sizeof(msg));//clear the buffer
+        if (1) {
+            std::lock_guard<std::mutex> guard(mutexpi);
+            send(clientSd, (char*)&msg, strlen(msg), 0);
+            memset(&msg, 0, sizeof(msg));//clear the buffer
+        }
         close(tcpSd);
         tcpSd = clientSd;
-        t2 = std::thread(&SimpleRenderer::rcv, this, *ptcpSd, true);
+        t2 = std::thread(&SimpleRenderer::pong, this, tcpSd, true, true);
     }
 
      
-    snd(*ptcpSd);
+    snd(tcpSd);
     t2.join();
 
     close(tcpSd);

@@ -58,28 +58,36 @@ bool checkalive(int i, int j) {
         else {
             std::cout << "cl: " << i << "discnted" << std::endl;
         }
-        if (futureObjPing[i].wait_for(std::chrono::microseconds(1)) == std::future_status::timeout) {
+        if (futureObjPing[i].valid() && (futureObjPing[i].wait_for(std::chrono::microseconds(1)) == std::future_status::timeout)) {
             exitSignalPing[i].set_value();
             futureObjPing[i].wait();
         }
-        if (futureObjPong[i].wait_for(std::chrono::microseconds(1)) == std::future_status::timeout) {
+        if (futureObjPong[i].valid() && (futureObjPong[i].wait_for(std::chrono::microseconds(1)) == std::future_status::timeout)) {
             exitSignalPong[i].set_value();
             futureObjPong[i].wait();
         }
-        if (futureObjPing[j].wait_for(std::chrono::microseconds(1)) == std::future_status::timeout) {
+        if (futureObjPing[j].valid() && (futureObjPing[j].wait_for(std::chrono::microseconds(1)) == std::future_status::timeout)) {
             exitSignalPing[j].set_value();
             futureObjPing[j].wait();
         }
-        if (futureObjPong[j].wait_for(std::chrono::microseconds(1)) == std::future_status::timeout) {
+        if (futureObjPong[j].valid() && (futureObjPong[j].wait_for(std::chrono::microseconds(1)) == std::future_status::timeout)) {
             exitSignalPong[j].set_value();
             futureObjPong[j].wait();
         }
 
-        std::cout << "479: waiting for pinger" << std::endl;
-        pongt[j].wait();
-        pongt[i].wait();
-        pingt[j].wait();
-        pingt[i].wait();
+        std::cout << "78: waiting for pinger" << std::endl;
+        if (pongt[j].valid()) {
+            pongt[j].wait();
+        }
+        if(pongt[i].valid()){
+            pongt[i].wait();
+        }
+        if (pingt[j].valid()) {
+            pingt[j].wait();
+        }
+        if (pingt[i].valid()) {
+            pingt[i].wait();
+        }
         exitSignalPing[i] = std::promise<void>{};
         exitSignalPong[i] = std::promise<void>{};
         exitSignalPing[j] = std::promise<void>{};
@@ -95,6 +103,7 @@ bool checkalive(int i, int j) {
         tmp1[i].clear();
         tmp[j].clear();
         tmp1[j].clear();
+        std::cout << "98: cleared" << std::endl;
         return false;
     }
     else {
@@ -300,12 +309,24 @@ void idp(int i, int j) {
 
     if (cmn1 == true && cmn2 == true) {
 
-        std::cout << "128: good" << std::endl;
-        if (checkalive(i, j) == true) {
-            exitSignalPong[i].set_value();
-            pongt[i].wait();
-            bool al = checkalive(i, j);
-            std::cout << "135: " << al << std::endl;
+        std::cout << "303: good" << std::endl;
+        for (int o = 0; o < 50; o++) {
+            if (checkalive(i, j)) {
+                if (o < 49) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+                else {
+                    exitSignalPong[i].set_value();
+                    if (pongt[i].valid()) {
+                        pongt[i].wait();
+                    }
+                    bool al = checkalive(i, j);
+                    std::cout << "324: " << al << std::endl;
+                }
+            }
+            else {
+                break;
+            }
         }
         tmp[i].clear();
         tmp[j].clear();
@@ -313,6 +334,7 @@ void idp(int i, int j) {
         bzero((char*)&tsk[i], sizeof(tsk[i]));
         close(newSd[i]);
         close(newSd[j]);
+        std::cout << "327: cler" << std::endl;
     }
     else if(cmn1 == false && cmn2 == false){
 
@@ -324,11 +346,14 @@ void idp(int i, int j) {
             std::thread tr2(rl, j, i);
             tr.join();
             tr2.join();
+
             if (checkalive(i, j) == true) {
                 exitSignalPong[i].set_value();
-                pongt[i].wait();
+                if (pongt[i].valid()) {
+                    pongt[i].wait();
+                }
                 bool al = checkalive(i, j);
-                std::cout << "135: " << al << std::endl;
+                std::cout << "354: " << al << std::endl;
             }
             std::cout << "ok" << std::endl;
         }
@@ -341,16 +366,18 @@ void idp(int i, int j) {
         tmp[j].clear();
         bzero((char*)&tsk[j], sizeof(tsk[j]));
         bzero((char*)&tsk[i], sizeof(tsk[i]));
-        std::cout << "cler" << std::endl;
+        std::cout << "358: cler" << std::endl;
 
     }
     else {
 
         if (checkalive(i, j) == true) {
             exitSignalPong[i].set_value();
-            pongt[i].wait();
+            if (pongt[i].valid()) {
+                pongt[i].wait();
+            }
             bool al = checkalive(i, j);
-            std::cout << "135: " << al << std::endl;
+            std::cout << "353: " << al << std::endl;
         }
         tmp[i].clear();
         tmp[j].clear();
@@ -364,30 +391,10 @@ void idp(int i, int j) {
 
 }
 
-void syc(int newSd, char msg[], char* msg1[], char* msg2[], sockaddr_in tsk) {
-
-    int a, a1, a2;
-    do {
-        a = sendto(newSd, (char*)msg, sizeof(msg), 0, (sockaddr*)&tsk, sizeof(tsk));
-        std::cout << msg << "(bytes:" << a << ")" << std::endl;
-    } while (a <= 5);
-    usleep(300000);
-    do {
-        a1 = sendto(newSd, (char*)msg1, sizeof(msg1), 0, (sockaddr*)&tsk, sizeof(tsk));
-        std::cout << msg1 << "(bytes:" << a1 << ")" << std::endl;
-    } while (a1 <= 2);
-    usleep(300000);
-    do {
-        a2 = sendto(newSd, (char*)msg2, sizeof(msg2), 0, (sockaddr*)&tsk, sizeof(tsk));
-        std::cout << msg2 << "(bytes:" << a2 << ")" << std::endl;
-    } while (a2 <= 2);
-
-}
-
 int lsn(int j, sockaddr_in6 newSockAddr) {
 
     if (j > 50 || j < 0) {
-        std::cout << "197: lsn invalid" << std::endl;
+        std::cout << "390: lsn invalid" << std::endl;
         return -1;
     }
 
@@ -471,10 +478,12 @@ bool pong( int j) {
         memset(&msg, 0, sizeof(msg));
         i = recv(newSd[j], (char*)&msg, sizeof(msg), 0);
         if ( i <= 0) {
-            std::cout << "290: pong rcv t/o" << std::endl;
+            std::cout << "474: pong rcv t/o" << std::endl;
             if (futureObjPing[j].wait_for(std::chrono::milliseconds(1)) == std::future_status::timeout) {
                 exitSignalPing[j].set_value();
-                pingt[j].wait();
+                if (pingt[j].valid()) {
+                    pingt[j].wait();
+                }
             }
             return false;
         }
@@ -615,6 +624,9 @@ int main(int argc, char* argv[])
 
                 if (j >= 0) {
                     for (int i = 0; i < 50; i++) {
+                        if (t[j].joinable() == true) {
+                            t[j].join();
+                        }
                         if (tmp[j] == tmp[i] && i != j) {
                             std::cout << "i: " << i << std::endl;
                             std::cout << tmp[j] << std::endl;
@@ -708,11 +720,7 @@ int main(int argc, char* argv[])
                                 break;*/
                             }
 
-                            if (t[j].joinable() == true) {
-
-                                t[j].join();
-
-                            }
+                            
 
                             tmp1[i].clear();
                             tmp1[j].clear();
