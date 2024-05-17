@@ -37,7 +37,7 @@ private:
     void punch(sockaddr sendSockAddr, std::future<void> futureObj);
     bool pong(int sock, bool np = false, bool rd = true);
     void snd(int tcpSd1);
-    //void rcv(int clientSd, bool rd = true);
+    void rcv(int clientSd);
     int connect_with_timeout(int sockfd, const struct sockaddr* addr, socklen_t addrlen, unsigned int timeout_ms);
     bool yon;
     int udpSd;
