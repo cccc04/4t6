@@ -589,7 +589,7 @@ void SimpleRenderer::SSS(const char* aa) {
     bzero((char*)&sendSockAddr, sizeof(sendSockAddr));
     sendSockAddr.sin6_family = AF_INET;
     sendSockAddr.sin6_addr.s6_addr = inet_addr(inet_ntoa(*(struct in_addr*)*host->h_addr_list));
-    sendSockAddr.sin_port = htons(sport);
+    sendSockAddr.sin_port = htons(sport);*/
 
     struct addrinfo  hints1;
     struct addrinfo* sendAd;
@@ -601,9 +601,9 @@ void SimpleRenderer::SSS(const char* aa) {
     hints1.ai_next = NULL;
     if (getaddrinfo(pt1[0].c_str(), std::to_string(stoi(pt1[1]) - 100).c_str(), &hints1, &sendAd) != 0) {
         std::cout << "gai 505" << std::endl;
-    }*/
+    }
 
-
+    int udpSd1 = socket(AF_INET6, SOCK_DGRAM, 0);
     udpSd = socket(AF_INET6, SOCK_DGRAM, 0);
 
     const int opt = 1;
@@ -614,10 +614,45 @@ void SimpleRenderer::SSS(const char* aa) {
     std::cout << "punching.." << std::endl;
     td = "..connecting";
     yon = true;
-    while (cnect(pt1[0].c_str(), std::to_string(stoi(pt1[1]) - 100).c_str(), udpSd, SOCK_DGRAM) == false) {
+    int iii = 0;
+    if (cnect(NULL, std::to_string(stoi(pt1[2]) - 100).c_str(), udpSd1, SOCK_DGRAM, false) == false) {
+        std::cout << "dintbind" << std::endl;
+    }
+    while ( cnect(pt1[0].c_str(), std::to_string(stoi(pt1[1]) - 100).c_str(), udpSd, SOCK_DGRAM) == false || iii < 5) {
         std::cout << "cantsocket" << std::endl;
-        std::this_thread::sleep_for(std::chrono::seconds(1));;
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        iii++;
         //return;
+    }
+
+    std::thread thread;
+    struct sockaddr_storage peer_addr;
+    socklen_t peer_addrlen;
+    thread = std::thread([&] {
+        for (int iiii = 0; iiii < 5; iiii++)
+        { 
+            char mssg[5];
+            std::cout << "630: here" << std::endl;
+            peer_addrlen = sizeof(peer_addr);
+            if (recvfrom(udpSd1, (char*)&mssg, sizeof(mssg), 0, (sockaddr*)&peer_addr, &peer_addrlen) < 0)
+            { 
+                std::cout << "625: -1" << std::endl;
+            }
+            else {
+                std::cout << "634: " << mssg << std::endl;
+            }
+        }
+    });
+    std::string ack = "ACK";
+    while (!thread.joinable()) {
+        char mssg[5];
+        strcpy(mssg, ack.c_str());
+        int iiii = send(udpSd, (char*)mssg, sizeof(mssg), 0);
+        if (iiii < 0) {
+            std::cout << "643: not send" << std::endl;
+        }
+        else std::cout << "647: " << iiii << std::endl;
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
     }
 
     /*std::promise<void> exitSignal1;
