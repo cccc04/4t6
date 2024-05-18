@@ -659,7 +659,7 @@ void SimpleRenderer::SSS(const char* aa) {
         }
         else std::cout << "647: " << iiii << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(300));
-        jjj++
+        jjj++;
     } while (thread.wait_for(std::chrono::microseconds(1)) == std::future_status::timeout && jjj < 5);
 
     /*std::promise<void> exitSignal1;
