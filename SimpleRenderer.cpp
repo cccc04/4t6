@@ -170,19 +170,6 @@ bool SimpleRenderer::checkalive() {
 
 void SimpleRenderer::rcv(int sock) {
 
-    auto checkalive = [&]() {
-        if (pongt.wait_for(std::chrono::microseconds(1)) == std::future_status::ready) {
-            if (futureObjPong.wait_for(std::chrono::microseconds(1)) == std::future_status::ready) {
-                exitSignalPong = std::promise<void>{};
-                futureObjPong = exitSignalPong.get_future();
-            }
-            std::cout << "162: Pinger dead" << std::endl;
-            td = ".lost connection";
-            yon = true;
-            return false;
-        }
-        return true;
-    };
     std::string sr, srr;
     while (1)
     {
@@ -275,13 +262,13 @@ bool SimpleRenderer::pong(int sock, bool np, bool rd) {
                 s.push_back(msg[j]);
             }
             if (s == "PING") {
-                std::cout << "367: ping rcved" << std::endl;
+                //std::cout << "367: ping rcved" << std::endl;
                 std::lock_guard<std::mutex> guard(mutexpi);
                 if (send(sock, (char*)&msgp, sizeof(msgp), 0) < 0) {
                     std::cout << "257: f snd" << std::endl;
                     return false;
                 }
-                std::cout << "372: ping sent" << std::endl;
+                //std::cout << "372: ping sent" << std::endl;
             }
             else if (s.find("Z ") == 0) {
                 //std::cout << "258: " << s << std::endl;
@@ -495,7 +482,7 @@ bool SimpleRenderer::cnect(const char* ip, const char* port, int &sock, int tcud
     if (cnnct == false){
         ip = NULL;
         hints.ai_canonname = NULL;
-        hints.ai_addr = NULL;
+        //hints.ai_addr = NULL;
         hints.ai_next = NULL;
         hints.ai_flags = AI_PASSIVE;
     }
@@ -598,6 +585,80 @@ void SimpleRenderer::SSS(const char* aa) {
     //create a message buffer 
     char msg[1500];
     //setup a socket and connection tools 
+    /*socklen_t ssz = sizeof(sendSockAddr);
+    bzero((char*)&sendSockAddr, sizeof(sendSockAddr));
+    sendSockAddr.sin6_family = AF_INET;
+    sendSockAddr.sin6_addr.s6_addr = inet_addr(inet_ntoa(*(struct in_addr*)*host->h_addr_list));
+    sendSockAddr.sin_port = htons(sport);
+
+    struct addrinfo  hints1;
+    struct addrinfo* sendAd;
+    //sockaddr6_in svAddr;
+    bzero((char*)&hints1, sizeof(hints1));
+    hints1.ai_family = AF_INET6;
+    hints1.ai_socktype = SOCK_STREAM;
+    //hints.ai_protocol = 0;
+    hints1.ai_next = NULL;
+    if (getaddrinfo(pt1[0].c_str(), std::to_string(stoi(pt1[1]) - 100).c_str(), &hints1, &sendAd) != 0) {
+        std::cout << "gai 505" << std::endl;
+    }*/
+
+
+    udpSd = socket(AF_INET6, SOCK_DGRAM, 0);
+
+    const int opt = 1;
+
+    if (setsockopt(udpSd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+        std::cout << "prblm2" << std::endl;
+    }
+    std::cout << "punching.." << std::endl;
+    td = "..connecting";
+    yon = true;
+    while (cnect(pt1[0].c_str(), std::to_string(stoi(pt1[1]) - 100).c_str(), udpSd, SOCK_DGRAM) == false) {
+        std::cout << "cantsocket" << std::endl;
+        std::this_thread::sleep_for(std::chrono::seconds(1));;
+        //return;
+    }
+
+    /*std::promise<void> exitSignal1;
+    std::future<void> futureObj1 = exitSignal1.get_future();
+
+    std::thread t1;
+    sockaddr sendSockAddr = *(sendAd->ai_addr);
+    t1 = std::thread(&SimpleRenderer::punch, this, sendSockAddr, std::move(futureObj1));
+    bool flg1 = false;
+    bool flg2 = false;
+    while (1) {
+        memset(&msg, 0, sizeof(msg));//clear the buffer
+        if (recv(SimpleRenderer::udpSd, (char*)msg, sizeof(msg), 0) != -1) {
+            std::cout << "the other side: " << msg << std::endl;
+            if (!strcmp(msg, "BANG")) {
+                std::cout << "THE HOLE's HERE, telling others.." << std::endl;
+                sendto(SimpleRenderer::udpSd, "WE GOT THE HOLE", 15, 0, (sockaddr*)&sendSockAddr, sizeof(sendSockAddr));
+                flg1 = true;
+            }
+            if (!strcmp(msg, "WE GOT THE HOLE")) {
+                std::cout << "punching done" << std::endl;
+                exitSignal1.set_value();
+                t1.join();
+                flg2 = true;
+            }
+            if (flg1 == true && flg2 == true) {
+                std::cout << "hole's ready" << std::endl;
+                break;
+            }
+        }
+        else {
+            std::cout << "cant recv" << std::endl;
+            exitSignal1.set_value();
+            t1.join();
+            break;
+        }
+    }*/
+
+
+
+
 
     int tcptd;
     bool xc;
@@ -711,7 +772,7 @@ void SimpleRenderer::SSS(const char* aa) {
 
         }
         else if (pt1[3] == "cl") {
-            const int opt = 1;
+            //const int opt = 1;
             /**/if (setsockopt(tcpSd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
                 std::cout << "prblm" << std::endl;
             }
@@ -783,76 +844,6 @@ void SimpleRenderer::SSS(const char* aa) {
             }
         }
     }
-    /*socklen_t ssz = sizeof(sendSockAddr);
-    bzero((char*)&sendSockAddr, sizeof(sendSockAddr));
-    sendSockAddr.sin6_family = AF_INET;
-    sendSockAddr.sin6_addr.s6_addr = inet_addr(inet_ntoa(*(struct in_addr*)*host->h_addr_list));
-    sendSockAddr.sin_port = htons(sport);
-
-    struct addrinfo  hints1;
-    struct addrinfo* sendAd;
-    //sockaddr6_in svAddr;
-    bzero((char*)&hints1, sizeof(hints1));
-    hints1.ai_family = AF_INET6;
-    hints1.ai_socktype = SOCK_STREAM;
-    //hints.ai_protocol = 0;
-    hints1.ai_next = NULL;
-    if (getaddrinfo(pt1[0].c_str(), pt1[1].c_str(), &hints1, &sendAd) != 0) {
-        std::cout << "gai 505" << std::endl;
-    }*/
-
-
-    /*udpSd = socket(AF_INET6, SOCK_DGRAM, 0);
-
-    if (setsockopt(udpSd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-        std::cout << "prblm2" << std::endl;
-    }
-    if (cnect(pt0, pt2, udpSd, SOCK_DGRAM, false) == false) {
-        std::cout << "cantsocket" << std::endl;
-        return;
-    }
-
-    std::promise<void> exitSignal1;
-    std::future<void> futureObj1 = exitSignal1.get_future();
-
-    std::thread t1;
-    sockaddr sendSockAddr = *(sendAd->ai_addr);
-    t1 = std::thread(&SimpleRenderer::punch, this, sendSockAddr, std::move(futureObj1));
-    std::cout << "punching.." << std::endl;
-    td = "..connecting";
-    yon = true;
-    bool flg1 = false;
-    bool flg2 = false;
-    /*while (1) {
-        memset(&msg, 0, sizeof(msg));//clear the buffer
-        if (recv(SimpleRenderer::udpSd, (char*)msg, sizeof(msg), 0) != -1) {
-            std::cout << "the other side: " << msg << std::endl;
-            if (!strcmp(msg, "BANG")) {
-                std::cout << "THE HOLE's HERE, telling others.." << std::endl;
-                sendto(SimpleRenderer::udpSd, "WE GOT THE HOLE", 15, 0, (sockaddr*)&sendSockAddr, sizeof(sendSockAddr));
-                flg1 = true;
-            }
-            if (!strcmp(msg, "WE GOT THE HOLE")) {
-                std::cout << "punching done" << std::endl;
-                exitSignal1.set_value();
-                t1.join();
-                flg2 = true;
-            }
-            if (flg1 == true && flg2 == true) {
-                std::cout << "hole's ready" << std::endl;
-                break;
-            }
-        }
-        else {
-            std::cout << "cant recv" << std::endl;
-            exitSignal1.set_value();
-            t1.join();
-            break;
-        }
-    }*/
-
-
-
     //exitSignal1.set_value();
     //t1.join();
     std::thread t2;
