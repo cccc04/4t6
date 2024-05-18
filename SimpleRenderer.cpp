@@ -649,6 +649,7 @@ void SimpleRenderer::SSS(const char* aa) {
         return;
     });
     std::string ack = "ACK";
+    int jjj = 0;
     do {
         char mssg[5];
         strcpy(mssg, ack.c_str());
@@ -658,7 +659,8 @@ void SimpleRenderer::SSS(const char* aa) {
         }
         else std::cout << "647: " << iiii << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(300));
-    } while (thread.wait_for(std::chrono::microseconds(1)) == std::future_status::timeout);
+        jjj++
+    } while (thread.wait_for(std::chrono::microseconds(1)) == std::future_status::timeout || jjj<5);
 
     /*std::promise<void> exitSignal1;
     std::future<void> futureObj1 = exitSignal1.get_future();
