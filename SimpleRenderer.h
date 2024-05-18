@@ -42,7 +42,6 @@ private:
     bool yon;
     int udpSd;
     int tcpSd;
-    int tcptd[200];
     std::string dt;
     std::string td;
     std::list<std::string> gmsg;

@@ -599,9 +599,10 @@ void SimpleRenderer::SSS(const char* aa) {
     char msg[1500];
     //setup a socket and connection tools 
 
-    bool xc = false;
-    int* ptcpSd;
+    int tcptd;
+    bool xc;
     for (int q = 0; q < 2; q++) {
+        xc = false;
         if (pt1[3] == "sv") {
             sockaddr_in6 servAddr;
             bzero((char*)&servAddr, sizeof(servAddr));
@@ -616,76 +617,82 @@ void SimpleRenderer::SSS(const char* aa) {
             {
                 std::cerr << "Error establishing the server socket" << std::endl;
             }
+            const int opt = 1;
+            if (setsockopt(serverSd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+                std::cout << "prblm" << std::endl;
+            }
             //bind the socket to its local address
             int bindStatus = bind(serverSd, (struct sockaddr*)&servAddr, sizeof(servAddr));
             if (bindStatus < 0)
             {
                 std::cerr << "Error binding socket to local address" << std::endl;
-
             }
-            listen(serverSd, 1);
+            else if(serverSd >= 0) {
+                listen(serverSd, 1);
 
-            sockaddr_in6 newSockAddr;
-            bzero((char*)&newSockAddr, sizeof(newSockAddr));
-            socklen_t newSockAddrSize = sizeof(newSockAddr);
-            int newSd;
-            auto acpt = [&] {
-                while (1) {
-                    newSd = accept(serverSd, (sockaddr*)&newSockAddr, &newSockAddrSize);
-                    if (newSd < 0)
-                    {
-                        std::cerr << "Error accepting request from client!" << std::endl;
-                        return false;
-                    }
-                    char ccstr[INET6_ADDRSTRLEN];
-                    std::string string = inet_ntop(AF_INET6, &(newSockAddr.sin6_addr.s6_addr), ccstr, INET6_ADDRSTRLEN);
-                    std::cout << string << ":" << ntohs(newSockAddr.sin6_port) << std::endl;
-                    if (string == pt1[0]) {
-                        std::cout << "Connected with client!" << std::endl;
-                        int yes = 1;
-                        if (setsockopt(newSd, SOL_SOCKET, SO_KEEPALIVE, &yes, sizeof(int)) == -1) {
-                            std::cout << "KAL fail" << std::endl;
+                sockaddr_in6 newSockAddr;
+                bzero((char*)&newSockAddr, sizeof(newSockAddr));
+                socklen_t newSockAddrSize = sizeof(newSockAddr);
+                int newSd;
+                auto acpt = [&] {
+                    while (1) {
+                        newSd = accept(serverSd, (sockaddr*)&newSockAddr, &newSockAddrSize);
+                        if (newSd < 0)
+                        {
+                            std::cerr << "Error accepting request from client!" << std::endl;
+                            return false;
                         }
-                        tcpSd = newSd;
-                        return true;
-                    }
+                        char ccstr[INET6_ADDRSTRLEN];
+                        std::string string = inet_ntop(AF_INET6, &(newSockAddr.sin6_addr.s6_addr), ccstr, INET6_ADDRSTRLEN);
+                        std::cout << string << ":" << ntohs(newSockAddr.sin6_port) << std::endl;
+                        if (string == pt1[0]) {
+                            std::cout << "Connected with client!" << std::endl;
+                            int yes = 1;
+                            if (setsockopt(newSd, SOL_SOCKET, SO_KEEPALIVE, &yes, sizeof(int)) == -1) {
+                                std::cout << "KAL fail" << std::endl;
+                            }
+                            tcpSd = newSd;
+                            return true;
+                        }
 
-                    //close(newSd);
-                }
-                return false;
-            };
-            std::future<bool> thread = std::async(acpt);
-            int x = 0;
-            while (gmsg.empty() && (thread.wait_for(std::chrono::microseconds(1)) == std::future_status::timeout)) {
-                if (checkalive()) {
-                    if (x == 5) {
-                        x = 0;
+                        //close(newSd);
                     }
-                    x++;
-                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                    return false;
+                };
+                std::future<bool> thread = std::async(acpt);
+                int x = 0;
+                while (gmsg.empty() && (thread.wait_for(std::chrono::microseconds(1)) == std::future_status::timeout)) {
+                    if (checkalive()) {
+                        if (x == 5) {
+                            x = 0;
+                        }
+                        x++;
+                        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                    }
+                    else {
+                        std::cout << "626: not alive" << std::endl;
+                        xc = false;
+                        close(serverSd);
+                        if (thread.valid()) {
+                            thread.wait();
+                        }
+                        break;
+                    }
+                }
+                if (thread.wait_for(std::chrono::microseconds(1)) == std::future_status::ready && thread.get() == true) {
+                        std::cout << "635: joinable" << std::endl;
+                        tcpSd = newSd;
+                        xc = true;
+                        break;
                 }
                 else {
-                    std::cout << "626: not alive" << std::endl;
-                    xc = false;
                     close(serverSd);
                     if (thread.valid()) {
                         thread.wait();
                     }
-                    break;
                 }
             }
-            if (thread.wait_for(std::chrono::microseconds(1)) == std::future_status::ready && thread.get() == true) {
-                    std::cout << "635: joinable" << std::endl;
-                    tcpSd = newSd;
-                    xc = true;
-                    break;
-            }
-            else {
-                close(serverSd);
-                if (thread.valid()) {
-                    thread.wait();
-                }
-                if (q == 0 ) {
+            if (q == 0 ) {
                     std::lock_guard<std::mutex> guard(mutexpo);
                     std::string srrr = gmsg.front();
                     gmsg.pop_front();
@@ -697,53 +704,46 @@ void SimpleRenderer::SSS(const char* aa) {
                     else {
                         std::cout << "649: no idea what happened here";
                     }
-                }
-                xc = false;
-                break;
             }
+            xc = false;
+            break;
+            
 
         }
         else if (pt1[3] == "cl") {
             const int opt = 1;
-            if (setsockopt(tcpSd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+            /**/if (setsockopt(tcpSd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
                 std::cout << "prblm" << std::endl;
             }
 
-            if (cnect(pt1[0].c_str(), std::to_string((stoi(pt1[2]) - 100)).c_str(), tcpSd, SOCK_STREAM, false) == false) {
+            /*if (cnect(pt1[0].c_str(), std::to_string((stoi(pt1[2]) - 100)).c_str(), tcpSd, SOCK_STREAM, false) == false) {
                 std::cout << "cantbindtcp" << std::endl;
                 td = "cantbindtcp";
                 yon = true;
                 return;
-            }
-
-            if (cnect(pt1[0].c_str(), std::to_string((stoi(pt1[1]) - 100)).c_str(), tcpSd, SOCK_STREAM) == false) {
+            }*/
+            xc = cnect(pt1[0].c_str(), std::to_string((stoi(pt1[1]) - 100)).c_str(), tcpSd, SOCK_STREAM);
+            if ( xc == false) {
 
                 std::cout << errno << std::endl;
                 close(tcpSd);
 
                 std::cout << "cantconnect, retrying once.." << std::endl;
-                tcptd[0] = socket(AF_INET6, SOCK_STREAM, 0);
-                if (setsockopt(tcptd[0], SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+                tcptd = socket(AF_INET6, SOCK_STREAM, 0);
+                /**/if (setsockopt(tcptd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
                     std::cout << "prblm" << std::endl;
                 }
-                if (cnect(pt1[0].c_str(), std::to_string((stoi(pt1[1]) - 100)).c_str(), tcptd[0], SOCK_STREAM, true, 1000) == false) {
-
-                    std::cout << errno << std::endl;
-                    xc = false;
-                }
                 else {
-                    xc = true;
-                    tcpSd = tcptd[0];
+                    xc = cnect(pt1[0].c_str(), std::to_string((stoi(pt1[1]) - 100)).c_str(), tcptd, SOCK_STREAM, true, 1000);
                 }
-                if (xc == false) {
-
+                if ( xc == false) {
                     std::cout << errno << std::endl;
+                    close(tcptd);
                     std::cout << "cantconnect" << std::endl;
                 }
-
-            }
-            else {
-                xc = true;
+                else {
+                    tcpSd = tcptd;
+                }
             }
             if (xc == false) {
                 if (q == 0) {
