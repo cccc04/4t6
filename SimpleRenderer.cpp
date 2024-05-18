@@ -628,9 +628,11 @@ void SimpleRenderer::SSS(const char* aa) {
     struct sockaddr_storage peer_addr;
     socklen_t peer_addrlen;
     std::future<void> thread = std::async([&] {
-        for (int iiii = 0; iiii < 5; iiii++)
+        std::string string;
+        while (string != "ACK")
         { 
             char mssg[5];
+            string.clear();
             std::cout << "630: here" << std::endl;
             peer_addrlen = sizeof(peer_addr);
             if (recvfrom(udpSd1, (char*)&mssg, sizeof(mssg), 0, (sockaddr*)&peer_addr, &peer_addrlen) < 0)
@@ -639,12 +641,15 @@ void SimpleRenderer::SSS(const char* aa) {
             }
             else {
                 std::cout << "634: " << mssg << std::endl;
+                for (int jj = 0; jj < strlen(mssg); jj++) {
+                    string.push_back(mssg[jj]);
+                }
             }
         }
         return;
     });
     std::string ack = "ACK";
-    while (thread.wait_for(std::chrono::microseconds(1)) == std::future_status::timeout) {
+    do {
         char mssg[5];
         strcpy(mssg, ack.c_str());
         int iiii = send(udpSd, (char*)mssg, sizeof(mssg), 0);
@@ -653,7 +658,7 @@ void SimpleRenderer::SSS(const char* aa) {
         }
         else std::cout << "647: " << iiii << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(300));
-    }
+    } while (thread.wait_for(std::chrono::microseconds(1)) == std::future_status::timeout);
 
     /*std::promise<void> exitSignal1;
     std::future<void> futureObj1 = exitSignal1.get_future();
