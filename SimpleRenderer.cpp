@@ -625,10 +625,9 @@ void SimpleRenderer::SSS(const char* aa) {
         //return;
     }
 
-    std::thread thread;
     struct sockaddr_storage peer_addr;
     socklen_t peer_addrlen;
-    thread = std::thread([&] {
+    std::future<void> thread = std::async([&] {
         for (int iiii = 0; iiii < 5; iiii++)
         { 
             char mssg[5];
@@ -642,9 +641,10 @@ void SimpleRenderer::SSS(const char* aa) {
                 std::cout << "634: " << mssg << std::endl;
             }
         }
+        return;
     });
     std::string ack = "ACK";
-    while (!thread.joinable()) {
+    while (thread.wait_for(std::chrono::microseconds(1)) == std::future_status::timeout) {
         char mssg[5];
         strcpy(mssg, ack.c_str());
         int iiii = send(udpSd, (char*)mssg, sizeof(mssg), 0);
